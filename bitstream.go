@@ -42,7 +42,12 @@ func NewBitReader[T IntegerType](data []T, leftPadd, rightPadd int) *BitReader[T
 // bits specifies how many bits to read (up to 16 bits).
 // n specifies which block to read (0-indexed).
 // Returns the bits as a uint16 value, right-aligned (LSB-aligned).
+//
+// Panics if bits > 16, as uint16 can only hold 16 bits.
 func (r BitReader[T]) U16R(bits, n int) (b uint16) {
+	if bits > 16 {
+		panic("bitstream: cannot read more than 16 bits into uint16")
+	}
 	s := min(n*bits, r.bits)
 	e := min(s+bits, r.bits)
 	for i := s; i < e; i++ {

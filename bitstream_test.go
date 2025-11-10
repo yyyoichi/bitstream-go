@@ -32,6 +32,8 @@ func TestBitReader(t *testing.T) {
 			n        int
 			expected uint16
 		}{
+			{0, 0, 0b0},
+			{0, 20, 0b0},
 			{1, 0, 0b1},
 			{1, 63, 0b0},
 			{3, 0, 0b101},
@@ -104,6 +106,15 @@ func TestBitReader(t *testing.T) {
 				t.Errorf("U16R(%d, %d) with lp %d and rp %d = %08b; want %08b", tt.bits, tt.n, tt.lp, tt.rp, result, tt.expected)
 			}
 		}
+	})
+	t.Run("U16R_panic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic when bits > 16")
+			}
+		}()
+		reader := NewBitReader([]uint8{0xFF, 0xFF, 0xFF}, 0, 0)
+		reader.U16R(17, 0) // Should panic
 	})
 }
 
