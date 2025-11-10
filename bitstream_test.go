@@ -106,3 +106,28 @@ func TestBitReader(t *testing.T) {
 		}
 	})
 }
+
+func TestNewBitReader_Panic(t *testing.T) {
+	tests := []struct {
+		name      string
+		leftPadd  int
+		rightPadd int
+	}{
+		{"padding sum equals element size", 4, 4},
+		{"padding sum exceeds element size", 5, 5},
+		{"left padding only equals size", 8, 0},
+		{"right padding only equals size", 0, 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("NewBitReader(leftPadd=%d, rightPadd=%d) did not panic", tt.leftPadd, tt.rightPadd)
+				}
+			}()
+			// Should panic
+			NewBitReader([]uint8{0xFF}, tt.leftPadd, tt.rightPadd)
+		})
+	}
+}

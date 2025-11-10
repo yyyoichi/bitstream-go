@@ -21,14 +21,20 @@ type BitReader[T IntegerType] struct {
 // For example, if each element has 2 bits of padding at the top and 1 bit at the bottom,
 // set leftPadd=2 and rightPadd=1.
 // The reader will only access bits from position leftPadd to (element size - rightPadd).
+//
+// Panics if leftPadd + rightPadd >= element bit size, as this would leave no valid bits to read.
 func NewBitReader[T IntegerType](data []T, leftPadd, rightPadd int) *BitReader[T] {
 	var zero T
-	var s = int(unsafe.Sizeof(zero))*8 - leftPadd - rightPadd
+	size := int(unsafe.Sizeof(zero)) * 8
+	if leftPadd+rightPadd >= size {
+		panic("bitstream: padding sum must be less than element bit size")
+	}
+	s := size - leftPadd - rightPadd
 	return &BitReader[T]{
 		data: data,
 		bits: len(data) * s,
 		s:    s,
-		msb:  T(1) << (s - 1 + rightPadd),
+		msb:  T(1) << (size - leftPadd - 1),
 	}
 }
 
