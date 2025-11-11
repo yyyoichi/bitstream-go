@@ -96,6 +96,7 @@ writer := bitstream.NewBitWriter[uint16](4, 0) // skip 4 top bits, 12 valid bits
 - `U64(leftPadd, bits int, data uint64)` - Write up to 64 bits
 - `Bool(data bool)` - Write a single bit
 - `Data() ([]T, int)` - Get data and bit count
+- `AnyData() (any, int)` - Get data as 'any type' and bit count
 
 ## License
 
