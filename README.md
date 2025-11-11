@@ -85,6 +85,7 @@ writer := bitstream.NewBitWriter[uint16](4, 0) // skip 4 top bits, 12 valid bits
 - `U16R(bits, n int) uint16` - Read up to 16 bits
 - `U32R(bits, n int) uint32` - Read up to 32 bits
 - `U64R(bits, n int) uint64` - Read up to 64 bits
+- `Bit() int` - The total number of valid bits
 
 ### BitWriter
 
