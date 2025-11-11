@@ -38,13 +38,21 @@ func NewBitReader[T IntegerType](data []T, leftPadd, rightPadd int) *BitReader[T
 	}
 }
 
+// SetBits sets the total number of valid bits in the BitReader.
+// Data beyond the specified bits position will be treated as zero,
+// regardless of the actual padding configuration.
+// This is useful for limiting the readable range within the data.
+func (r *BitReader[T]) SetBits(bits int) {
+	r.bits = bits
+}
+
 // U16R reads a specified number of bits from the n-th position in the data.
 // bits specifies how many bits to read (up to 16 bits).
 // n specifies which block to read (0-indexed).
 // Returns the bits as a uint16 value, right-aligned (LSB-aligned).
 //
 // Panics if bits > 16, as uint16 can only hold 16 bits.
-func (r BitReader[T]) U16R(bits, n int) (b uint16) {
+func (r *BitReader[T]) U16R(bits, n int) (b uint16) {
 	if bits > 16 {
 		panic("bitstream: cannot read more than 16 bits into uint16")
 	}
@@ -56,6 +64,9 @@ func (r BitReader[T]) U16R(bits, n int) (b uint16) {
 		if r.data[i/r.s]&mask != 0 {
 			b |= 1
 		}
+	}
+	for range bits - (e - s) {
+		b <<= 1
 	}
 	return
 }

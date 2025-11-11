@@ -57,6 +57,27 @@ func TestBitReader(t *testing.T) {
 			})
 		}
 	})
+	t.Run("U16R_RoundTrip", func(t *testing.T) {
+		reader := NewBitReader([]uint8{0b11111111}, 0, 0)
+		test := []struct {
+			bits     int
+			n        int
+			expected uint16
+		}{
+			{1, 8, 0b0},
+			{2, 4, 0b00},
+			{3, 2, 0b110},
+			{5, 1, 0b11100},
+			{6, 1, 0b110000},
+			{7, 1, 0b1000000},
+		}
+		for _, tt := range test {
+			result := reader.U16R(tt.bits, tt.n)
+			if result != tt.expected {
+				t.Errorf("U16R(%d, %d) = %08b; want %08b", tt.bits, tt.n, result, tt.expected)
+			}
+		}
+	})
 	t.Run("U16R_withPadding", func(t *testing.T) {
 		var data = []uint8{
 			0b10101100,
@@ -115,6 +136,16 @@ func TestBitReader(t *testing.T) {
 		}()
 		reader := NewBitReader([]uint8{0xFF, 0xFF, 0xFF}, 0, 0)
 		reader.U16R(17, 0) // Should panic
+	})
+
+	t.Run("SetBits", func(t *testing.T) {
+		data := []uint8{0b11111111}
+		reader := NewBitReader(data, 1, 1)
+		reader.SetBits(5)
+		r := reader.U16R(8, 0)
+		if r != 0b11111000 {
+			t.Errorf("SetBits or U16R failed: got %08b; want %08b", r, 0b11111000)
+		}
 	})
 }
 
