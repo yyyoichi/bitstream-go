@@ -57,7 +57,7 @@ func TestBitReader(t *testing.T) {
 			})
 		}
 	})
-	t.Run("right_RoundTrip", func(t *testing.T) {
+	t.Run("right_BoundaryValue", func(t *testing.T) {
 		reader := NewBitReader([]uint8{0b11111111}, 0, 0)
 		test := []struct {
 			bits     int
