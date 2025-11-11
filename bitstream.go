@@ -46,6 +46,19 @@ func (r *BitReader[T]) SetBits(bits int) {
 	r.bits = bits
 }
 
+// U8R reads a specified number of bits from the n-th position in the data.
+// bits specifies how many bits to read (up to 8 bits).
+// n specifies which block to read (0-indexed).
+// Returns the bits as a uint16 value, right-aligned (LSB-aligned).
+//
+// Panics if bits > 8, as uint16 can only hold 8 bits.
+func (r *BitReader[T]) U8R(bits, n int) uint8 {
+	if bits > 8 {
+		panic("bitstream: cannot read more than 8 bits into uint16")
+	}
+	return uint8(r.right(bits, n))
+}
+
 // U16R reads a specified number of bits from the n-th position in the data.
 // bits specifies how many bits to read (up to 16 bits).
 // n specifies which block to read (0-indexed).
@@ -56,6 +69,36 @@ func (r *BitReader[T]) U16R(bits, n int) (b uint16) {
 	if bits > 16 {
 		panic("bitstream: cannot read more than 16 bits into uint16")
 	}
+	return uint16(r.right(bits, n))
+}
+
+// U32R reads a specified number of bits from the n-th position in the data.
+// bits specifies how many bits to read (up to 32 bits).
+// n specifies which block to read (0-indexed).
+// Returns the bits as a uint16 value, right-aligned (LSB-aligned).
+//
+// Panics if bits > 32, as uint16 can only hold 32 bits.
+func (r *BitReader[T]) U32R(bits, n int) (b uint32) {
+	if bits > 32 {
+		panic("bitstream: cannot read more than 32 bits into uint16")
+	}
+	return uint32(r.right(bits, n))
+}
+
+// U64R reads a specified number of bits from the n-th position in the data.
+// bits specifies how many bits to read (up to 64 bits).
+// n specifies which block to read (0-indexed).
+// Returns the bits as a uint16 value, right-aligned (LSB-aligned).
+//
+// Panics if bits > 64, as uint16 can only hold 64 bits.
+func (r *BitReader[T]) U64R(bits, n int) (b uint64) {
+	if bits > 64 {
+		panic("bitstream: cannot read more than 64 bits into uint16")
+	}
+	return r.right(bits, n)
+}
+
+func (r *BitReader[T]) right(bits, n int) (b uint64) {
 	s := min(n*bits, r.bits)
 	e := min(s+bits, r.bits)
 	for i := s; i < e; i++ {

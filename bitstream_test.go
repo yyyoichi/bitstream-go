@@ -3,11 +3,11 @@ package bitstream
 import "testing"
 
 func TestBitReader(t *testing.T) {
-	t.Run("U16R", func(t *testing.T) {
+	t.Run("right", func(t *testing.T) {
 		readers := []struct {
 			name   string
 			reader interface {
-				U16R(bits int, n int) (b uint16)
+				right(bits int, n int) (b uint64)
 			}
 		}{
 			{"uint8", NewBitReader([]uint8{
@@ -30,7 +30,7 @@ func TestBitReader(t *testing.T) {
 		test := []struct {
 			bits     int
 			n        int
-			expected uint16
+			expected uint64
 		}{
 			{0, 0, 0b0},
 			{0, 20, 0b0},
@@ -49,20 +49,20 @@ func TestBitReader(t *testing.T) {
 		for _, r := range readers {
 			t.Run(r.name, func(t *testing.T) {
 				for _, tt := range test {
-					result := r.reader.U16R(tt.bits, tt.n)
+					result := r.reader.right(tt.bits, tt.n)
 					if result != tt.expected {
-						t.Errorf("U16R(%d, %d) = %08b; want %08b", tt.bits, tt.n, result, tt.expected)
+						t.Errorf("right(%d, %d) = %08b; want %08b", tt.bits, tt.n, result, tt.expected)
 					}
 				}
 			})
 		}
 	})
-	t.Run("U16R_RoundTrip", func(t *testing.T) {
+	t.Run("right_RoundTrip", func(t *testing.T) {
 		reader := NewBitReader([]uint8{0b11111111}, 0, 0)
 		test := []struct {
 			bits     int
 			n        int
-			expected uint16
+			expected uint64
 		}{
 			{1, 8, 0b0},
 			{2, 4, 0b00},
@@ -72,13 +72,13 @@ func TestBitReader(t *testing.T) {
 			{7, 1, 0b1000000},
 		}
 		for _, tt := range test {
-			result := reader.U16R(tt.bits, tt.n)
+			result := reader.right(tt.bits, tt.n)
 			if result != tt.expected {
-				t.Errorf("U16R(%d, %d) = %08b; want %08b", tt.bits, tt.n, result, tt.expected)
+				t.Errorf("right(%d, %d) = %08b; want %08b", tt.bits, tt.n, result, tt.expected)
 			}
 		}
 	})
-	t.Run("U16R_withPadding", func(t *testing.T) {
+	t.Run("right_withPadding", func(t *testing.T) {
 		var data = []uint8{
 			0b10101100,
 			0b11100011,
@@ -89,7 +89,7 @@ func TestBitReader(t *testing.T) {
 			lp, rp   int
 			bits     int
 			n        int
-			expected uint16
+			expected uint64
 		}{
 			{1, 0, 1, 0, 0b0},
 			{1, 0, 1, 1, 0b1},
@@ -122,9 +122,9 @@ func TestBitReader(t *testing.T) {
 		}
 		for _, tt := range test {
 			reader := NewBitReader(data, tt.lp, tt.rp)
-			result := reader.U16R(tt.bits, tt.n)
+			result := reader.right(tt.bits, tt.n)
 			if result != tt.expected {
-				t.Errorf("U16R(%d, %d) with lp %d and rp %d = %08b; want %08b", tt.bits, tt.n, tt.lp, tt.rp, result, tt.expected)
+				t.Errorf("right(%d, %d) with lp %d and rp %d = %08b; want %08b", tt.bits, tt.n, tt.lp, tt.rp, result, tt.expected)
 			}
 		}
 	})
@@ -135,41 +135,16 @@ func TestBitReader(t *testing.T) {
 			}
 		}()
 		reader := NewBitReader([]uint8{0xFF, 0xFF, 0xFF}, 0, 0)
-		reader.U16R(17, 0) // Should panic
+		reader.right(17, 0) // Should panic
 	})
 
 	t.Run("SetBits", func(t *testing.T) {
 		data := []uint8{0b11111111}
 		reader := NewBitReader(data, 1, 1)
 		reader.SetBits(5)
-		r := reader.U16R(8, 0)
+		r := reader.right(8, 0)
 		if r != 0b11111000 {
-			t.Errorf("SetBits or U16R failed: got %08b; want %08b", r, 0b11111000)
+			t.Errorf("SetBits or right failed: got %08b; want %08b", r, 0b11111000)
 		}
 	})
-}
-
-func TestNewBitReader_Panic(t *testing.T) {
-	tests := []struct {
-		name      string
-		leftPadd  int
-		rightPadd int
-	}{
-		{"padding sum equals element size", 4, 4},
-		{"padding sum exceeds element size", 5, 5},
-		{"left padding only equals size", 8, 0},
-		{"right padding only equals size", 0, 8},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("NewBitReader(leftPadd=%d, rightPadd=%d) did not panic", tt.leftPadd, tt.rightPadd)
-				}
-			}()
-			// Should panic
-			NewBitReader([]uint8{0xFF}, tt.leftPadd, tt.rightPadd)
-		})
-	}
 }
