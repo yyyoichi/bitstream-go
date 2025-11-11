@@ -101,6 +101,11 @@ func (r *BitReader[T]) U64R(bits, n int) (b uint64) {
 	return r.right(bits, n)
 }
 
+// Bits returns the total number of valid bits in the BitReader.
+func (r *BitReader[T]) Bits() int {
+	return r.bits
+}
+
 func (r *BitReader[T]) right(bits, n int) (b uint64) {
 	s := min(n*bits, r.bits)
 	e := min(s+bits, r.bits)
