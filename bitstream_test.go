@@ -148,3 +148,302 @@ func TestBitReader(t *testing.T) {
 		}
 	})
 }
+
+func TestBitWriter(t *testing.T) {
+	t.Run("writeU8", func(t *testing.T) {
+		writer := NewBitWriter[uint64](0, 0)
+		writer.U8(0, 8, 255)
+		if writer.bits != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.bits)
+		}
+		if writer.data[0] != uint64(255)<<56 {
+			t.Errorf("expected data[0] to be %08b, got %08b", uint64(255)<<56, writer.data[0])
+		}
+		writer.U8(1, 7, 255)
+		if writer.bits != 15 {
+			t.Errorf("expected bits to be 15, got %d", writer.bits)
+		}
+		if writer.data[0] != (uint64(255)<<56)|(uint64(127)<<49) {
+			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(255)<<56)|(uint64(127)<<49), writer.data[0])
+		}
+		writer.U8(0, 8, 0)
+		writer.U8(6, 1, 255)
+		if writer.bits != 24 {
+			t.Errorf("expected bits to be 24, got %d", writer.bits)
+		}
+		if writer.data[0] != (uint64(255)<<56)|(uint64(127)<<49)|(uint64(0b0)<<41)|(uint64(0b1)<<40) {
+			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(255)<<56)|(uint64(127)<<49)|(uint64(0b0)<<41)|(uint64(0b1)<<40), writer.data[0])
+		}
+		if len(writer.data) != 1 {
+			t.Errorf("expected 1 element in data, got %d", len(writer.data))
+		}
+	})
+	t.Run("write16", func(t *testing.T) {
+		writer := NewBitWriter[uint64](0, 0)
+		writer.U16(0, 16, 65535)
+		if writer.bits != 16 {
+			t.Errorf("expected bits to be 16, got %d", writer.bits)
+		}
+		if writer.data[0] != uint64(65535)<<48 {
+			t.Errorf("expected data[0] to be %08b, got %08b", uint64(65535)<<48, writer.data[0])
+		}
+		writer.U16(2, 14, 65535)
+		if writer.bits != 30 {
+			t.Errorf("expected bits to be 30, got %d", writer.bits)
+		}
+		if writer.data[0] != (uint64(65535)<<48)|(uint64(0x3FFF)<<34) {
+			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(65535)<<48)|(uint64(0x3FFF)<<34), writer.data[0])
+		}
+		writer.U16(0, 16, 0)
+		writer.U16(5, 2, 65535)
+		if writer.bits != 48 {
+			t.Errorf("expected bits to be 48, got %d", writer.bits)
+		}
+		if writer.data[0] != (uint64(65535)<<48)|(uint64(0x3FFF)<<34)|(uint64(0b0)<<18)|(uint64(0b11)<<16) {
+			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(65535)<<48)|(uint64(0x3FFF)<<34)|(uint64(0b0)<<18)|(uint64(0b11)<<16), writer.data[0])
+		}
+		if len(writer.data) != 1 {
+			t.Errorf("expected 1 element in data, got %d", len(writer.data))
+		}
+	})
+	t.Run("write32", func(t *testing.T) {
+		writer := NewBitWriter[uint64](0, 0)
+		writer.U32(0, 32, 0xFFFFFFFF)
+		if writer.bits != 32 {
+			t.Errorf("expected bits to be 32, got %d", writer.bits)
+		}
+		if writer.data[0] != uint64(0xFFFFFFFF)<<32 {
+			t.Errorf("expected data[0] to be %08b, got %08b", uint64(0xFFFFFFFF)<<32, writer.data[0])
+		}
+		writer.U32(4, 28, 0xFFFFFFFF)
+		if writer.bits != 60 {
+			t.Errorf("expected bits to be 60, got %d", writer.bits)
+		}
+		if writer.data[0] != (uint64(0xFFFFFFFF)<<32)|(uint64(0x0FFFFFFF)<<4) {
+			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(0xFFFFFFFF)<<32)|(uint64(0x0FFFFFFF)<<4), writer.data[0])
+		}
+		writer.U32(0, 32, 0)
+		writer.U32(10, 4, 0xFFFFFFFF)
+		if writer.bits != 96 {
+			t.Errorf("expected bits to be 96, got %d", writer.bits)
+		}
+		if writer.data[0] != uint64(0xFFFFFFFF)<<32|(uint64(0xFFFFFFF)<<4) {
+			t.Errorf("expected data[0] to be %064b, got %064b", uint64(0xFFFFFFFF)<<32|(uint64(0xFFFFFFF)<<4), writer.data[0])
+		}
+		if writer.data[1] != uint64(0xF)<<32 {
+			t.Errorf("expected data[1] to be %016b, got %016b", uint64(0xF)<<32, writer.data[1])
+		}
+		if len(writer.data) != 2 {
+			t.Errorf("expected 2 elements in data, got %d", len(writer.data))
+		}
+	})
+	t.Run("write64", func(t *testing.T) {
+		writer := NewBitWriter[uint64](0, 0)
+		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		if writer.bits != 64 {
+			t.Errorf("expected bits to be 64, got %d", writer.bits)
+		}
+		if writer.data[0] != 0xFFFFFFFFFFFFFFFF {
+			t.Errorf("expected data[0] to be %016x, got %016x", uint64(0xFFFFFFFFFFFFFFFF), writer.data[0])
+		}
+		writer.U64(8, 56, 0xFFFFFFFFFFFFFFFF)
+		if writer.bits != 120 {
+			t.Errorf("expected bits to be 120, got %d", writer.bits)
+		}
+		if len(writer.data) != 2 {
+			t.Errorf("expected 2 elements in data, got %d", len(writer.data))
+		}
+		if writer.data[1] != uint64(0x00FFFFFFFFFFFFFF)<<8 {
+			t.Errorf("expected data[1] to be %016x, got %016x", uint64(0x00FFFFFFFFFFFFFF)<<8, writer.data[1])
+		}
+		writer.U64(0, 64, 0)
+		writer.U64(20, 8, 0xFFFFFFFFFFFFFFFF)
+		if writer.bits != 192 {
+			t.Errorf("expected bits to be 192, got %d", writer.bits)
+		}
+		if writer.data[1] != uint64(0x00FFFFFFFFFFFFFF)<<8 {
+			t.Errorf("expected data[1] to be %016x, got %016x", uint64(0x00FFFFFFFFFFFFFF)<<8, writer.data[1])
+		}
+		if writer.data[2] != uint64(0xFF) {
+			t.Errorf("expected data[2] to be %016x, got %016x", uint64(0xFF), writer.data[2])
+		}
+		if len(writer.data) != 3 {
+			t.Errorf("expected 3 elements in data, got %d", len(writer.data))
+		}
+	})
+	t.Run("writeBool", func(t *testing.T) {
+		writer := NewBitWriter[uint64](0, 0)
+		writer.Bool(true)
+		if writer.bits != 1 {
+			t.Errorf("expected bits to be 1, got %d", writer.bits)
+		}
+		if writer.data[0] != uint64(1)<<63 {
+			t.Errorf("expected data[0] to be %08b, got %08b", uint64(1)<<63, writer.data[0])
+		}
+		writer.Bool(false)
+		writer.Bool(true)
+		if writer.bits != 3 {
+			t.Errorf("expected bits to be 2, got %d", writer.bits)
+		}
+		if writer.data[0] != (uint64(1)<<63)|(uint64(01)<<61) {
+			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(1)<<63)|(uint64(0)<<61), writer.data[0])
+		}
+	})
+	t.Run("writeWithPadding", func(t *testing.T) {
+		writer := NewBitWriter[uint8](1, 0)
+		writer.U8(0, 8, 0xFF)
+		if writer.bits != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.bits)
+		}
+		if writer.data[0] != uint8(0b01111111) {
+			t.Errorf("expected data[0] to be %08b, got %08b", uint8(0b01111111), writer.data[0])
+		}
+		if writer.data[1] != uint8(0b01000000) {
+			t.Errorf("expected data[1] to be %08b, got %08b", uint8(0b01000000), writer.data[1])
+		}
+		writer = NewBitWriter[uint8](1, 2)
+		writer.U8(0, 8, 0xFF)
+		if writer.bits != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.bits)
+		}
+		if writer.data[0] != uint8(0b01111100) {
+			t.Errorf("expected data[0] to be %08b, got %08b", uint8(0b01111100), writer.data[0])
+		}
+		if writer.data[1] != uint8(0b01110000) {
+			t.Errorf("expected data[1] to be %08b, got %08b", uint8(0b01110000), writer.data[1])
+		}
+	})
+	t.Run("Data_uint8", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+		writer.U16(0, 16, 0xFFFF)
+		data, bits := writer.Data()
+		if bits != 16 {
+			t.Errorf("expected bits to be 16, got %d", bits)
+		}
+		if len(data) != 2 {
+			t.Errorf("expected data length to be 2, got %d", len(data))
+		}
+		if data[0] != 0xFF {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0xFF, data[0])
+		}
+		if data[1] != 0xFF {
+			t.Errorf("expected data[1] to be %08b, got %08b", 0xFF, data[1])
+		}
+		writer = NewBitWriter[uint8](1, 1)
+		writer.U16(0, 16, 0xFFFF)
+		data, bits = writer.Data()
+		if bits != 16+3+2 {
+			t.Errorf("expected bits to be 21, got %d", bits)
+		}
+		if len(data) != 3 {
+			t.Errorf("expected data length to be 3, got %d", len(data))
+		}
+		if data[0] != 0b01111110 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b01111110, data[0])
+		}
+		if data[1] != 0b01111110 {
+			t.Errorf("expected data[1] to be %08b, got %08b", 0b01111110, data[1])
+		}
+		if data[2] != 0b01111000 {
+			t.Errorf("expected data[2] to be %08b, got %08b", 0b01111000, data[2])
+		}
+	})
+	t.Run("Data_uint16", func(t *testing.T) {
+		writer := NewBitWriter[uint16](0, 0)
+		writer.U32(0, 32, 0xFFFFFFFF)
+		data, bits := writer.Data()
+		if bits != 32 {
+			t.Errorf("expected bits to be 32, got %d", bits)
+		}
+		if len(data) != 2 {
+			t.Errorf("expected data length to be 2, got %d", len(data))
+		}
+		if data[0] != 0xFFFF {
+			t.Errorf("expected data[0] to be %016b, got %016b", 0xFFFF, data[0])
+		}
+		if data[1] != 0xFFFF {
+			t.Errorf("expected data[1] to be %016b, got %016b", 0xFFFF, data[1])
+		}
+		writer = NewBitWriter[uint16](2, 2)
+		writer.U32(0, 32, 0xFFFFFFFF)
+		data, bits = writer.Data()
+		if bits != 32+6+4 {
+			t.Errorf("expected bits to be 42, got %d", bits)
+		}
+		if len(data) != 3 {
+			t.Errorf("expected data length to be 3, got %d", len(data))
+		}
+		if data[0] != 0x3FFC {
+			t.Errorf("expected data[0] to be %016b, got %016b", 0x3FFC, data[0])
+		}
+	})
+	t.Run("Data_uint32", func(t *testing.T) {
+		writer := NewBitWriter[uint32](0, 0)
+		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		data, bits := writer.Data()
+		if bits != 64 {
+			t.Errorf("expected bits to be 64, got %d", bits)
+		}
+		if len(data) != 2 {
+			t.Errorf("expected data length to be 2, got %d", len(data))
+		}
+		if data[0] != 0xFFFFFFFF {
+			t.Errorf("expected data[0] to be %032b, got %032b", 0xFFFFFFFF, data[0])
+		}
+		if data[1] != 0xFFFFFFFF {
+			t.Errorf("expected data[1] to be %032b, got %032b", 0xFFFFFFFF, data[1])
+		}
+		writer = NewBitWriter[uint32](4, 4)
+		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		data, bits = writer.Data()
+		if bits != 64+12+8 {
+			t.Errorf("expected bits to be 88, got %d", bits)
+		}
+		if len(data) != 3 {
+			t.Errorf("expected data length to be 3, got %d", len(data))
+		}
+		if data[0] != 0x0FFFFFF0 {
+			t.Errorf("expected data[0] to be %032b, got %032b", 0x0FFFFFF0, data[0])
+		}
+		if data[1] != 0x0FFFFFF0 {
+			t.Errorf("expected data[1] to be %032b, got %032b", 0x0FFFFFF0, data[1])
+		}
+		if data[2] != 0x0FFFF000 {
+			t.Errorf("expected data[2] to be %032b, got %032b", 0x0FFFF000, data[2])
+		}
+	})
+	t.Run("Data_uint64", func(t *testing.T) {
+		writer := NewBitWriter[uint64](0, 0)
+		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		data, bits := writer.Data()
+		if bits != 128 {
+			t.Errorf("expected bits to be 128, got %d", bits)
+		}
+		if len(data) != 2 {
+			t.Errorf("expected data length to be 2, got %d", len(data))
+		}
+		if data[0] != 0xFFFFFFFFFFFFFFFF {
+			t.Errorf("expected data[0] to be %064b, got %064b", uint64(0xFFFFFFFFFFFFFFFF), data[0])
+		}
+		if data[1] != 0xFFFFFFFFFFFFFFFF {
+			t.Errorf("expected data[1] to be %064b, got %064b", uint64(0xFFFFFFFFFFFFFFFF), data[1])
+		}
+
+		writer = NewBitWriter[uint64](8, 8)
+		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		data, bits = writer.Data()
+		if bits != 64+16+8 {
+			t.Errorf("expected bits to be 88, got %d", bits)
+		}
+		if len(data) != 2 {
+			t.Errorf("expected data length to be 2, got %d", len(data))
+		}
+		if data[0] != uint64(0x00FFFFFFFFFFFF00) {
+			t.Errorf("expected data[0] to be %064b, got %064b", uint64(0x00FFFFFFFFFFFF00), data[0])
+		}
+		if data[1] != uint64(0x00FFFF)<<40 {
+			t.Errorf("expected data[1] to be %064b, got %064b", uint64(0x00FFFF)<<40, data[1])
+		}
+	})
+}

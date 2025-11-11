@@ -1,6 +1,9 @@
 package bitstream
 
-import "unsafe"
+import (
+	"sync"
+	"unsafe"
+)
 
 type IntegerType interface {
 	~uint64 | ~uint32 | ~uint16 | ~uint8 | ~uint
@@ -112,4 +115,136 @@ func (r *BitReader[T]) right(bits, n int) (b uint64) {
 		b <<= 1
 	}
 	return
+}
+
+// BitWriter provides bit-level writing operations to integer slice data.
+// It treats the destination as a continuous bit stream, allowing precise bit insertion.
+// BitWriter is safe for concurrent use.
+type BitWriter[T IntegerType] struct {
+	mu   *sync.Mutex
+	data []T // Destination data to write bits into
+	bits int // Total number of bits written so far
+	s    int // Number of valid bits per element (element size - left padding - right padding)
+	msb  T   // MSB mask for the valid bit range
+	lp   int // Left padding bits
+	rp   int // Right padding bits
+}
+
+// NewBitWriter creates a new BitWriter for writing bits to integer slice data.
+// leftPadd specifies how many upper bits in each element should be treated as padding.
+// rightPadd specifies how many lower bits in each element should be treated as padding.
+// The writer will only write bits to the valid range between paddings.
+//
+// Panics if leftPadd + rightPadd >= element bit size, as this would leave no valid bits to write.
+func NewBitWriter[T IntegerType](leftPadd, rightPadd int) *BitWriter[T] {
+	var zero T
+	size := int(unsafe.Sizeof(zero)) * 8
+	if leftPadd+rightPadd >= size {
+		panic("bitstream: padding sum must be less than element bit size")
+	}
+	s := size - leftPadd - rightPadd
+	return &BitWriter[T]{
+		mu:   &sync.Mutex{},
+		data: make([]T, 0),
+		bits: 0,
+		s:    s,
+		msb:  T(1) << (size - leftPadd - 1),
+		lp:   leftPadd,
+		rp:   rightPadd,
+	}
+}
+
+// U8 writes the specified bits from a uint8 value to the stream.
+// leftPadd specifies how many upper bits to skip in the source data.
+// bits specifies how many bits to write after skipping leftPadd bits.
+//
+// Panics if leftPadd + bits > 8.
+func (w *BitWriter[T]) U8(leftPadd, bits int, data uint8) {
+	if leftPadd+bits > 8 {
+		panic("bitstream: padding and bits exceed uint8 size")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i := leftPadd; i < leftPadd+bits; i++ {
+		w.write(data&(1<<(7-i)) != 0)
+	}
+}
+
+// U16 writes the specified bits from a uint16 value to the stream.
+// leftPadd specifies how many upper bits to skip in the source data.
+// bits specifies how many bits to write after skipping leftPadd bits.
+//
+// Panics if leftPadd + bits > 16.
+func (w *BitWriter[T]) U16(leftPadd, bits int, data uint16) {
+	if leftPadd+bits > 16 {
+		panic("bitstream: padding and bits exceed uint16 size")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i := leftPadd; i < leftPadd+bits; i++ {
+		w.write(data&(1<<(15-i)) != 0)
+	}
+}
+
+// U32 writes the specified bits from a uint32 value to the stream.
+// leftPadd specifies how many upper bits to skip in the source data.
+// bits specifies how many bits to write after skipping leftPadd bits.
+//
+// Panics if leftPadd + bits > 32.
+func (w *BitWriter[T]) U32(leftPadd, bits int, data uint32) {
+	if leftPadd+bits > 32 {
+		panic("bitstream: padding and bits exceed uint32 size")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i := leftPadd; i < leftPadd+bits; i++ {
+		w.write(data&(1<<(31-i)) != 0)
+	}
+}
+
+// U64 writes the specified bits from a uint64 value to the stream.
+// leftPadd specifies how many upper bits to skip in the source data.
+// bits specifies how many bits to write after skipping leftPadd bits.
+//
+// Panics if leftPadd + bits > 64.
+func (w *BitWriter[T]) U64(leftPadd, bits int, data uint64) {
+	if leftPadd+bits > 64 {
+		panic("bitstream: padding and bits exceed uint64 size")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i := leftPadd; i < leftPadd+bits; i++ {
+		w.write(data&(1<<(63-i)) != 0)
+	}
+}
+
+// Bool writes a single boolean value as one bit to the stream.
+func (w *BitWriter[T]) Bool(data bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.write(data)
+}
+
+// Data returns the accumulated data and the total number of bits written.
+// The returned slice and bit count reflect all bits written so far.
+func (w *BitWriter[T]) Data() ([]T, int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var bits = w.bits
+	// add left padding bits for each element
+	bits += len(w.data) * w.lp
+	// add right padding bits for each element
+	bits += (len(w.data) - 1) * w.rp
+	return w.data, bits
+}
+
+func (w *BitWriter[T]) write(b bool) {
+	idx := w.bits / w.s
+	if idx >= len(w.data) {
+		w.data = append(w.data, 0)
+	}
+	if b {
+		w.data[idx] |= w.msb >> (w.bits % w.s)
+	}
+	w.bits += 1
 }
