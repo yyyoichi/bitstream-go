@@ -5,13 +5,13 @@ import (
 	"unsafe"
 )
 
-type IntegerType interface {
+type Unsigned interface {
 	~uint64 | ~uint32 | ~uint16 | ~uint8 | ~uint
 }
 
 // BitReader provides bit-level reading operations on integer slice data.
 // It treats the data as a continuous bit stream, allowing precise bit extraction.
-type BitReader[T IntegerType] struct {
+type BitReader[T Unsigned] struct {
 	data []T // Source data to read bits from
 	bits int // Total number of valid bits in the data
 	s    int // Number of valid bits per element (element size - left padding - right padding)
@@ -26,7 +26,7 @@ type BitReader[T IntegerType] struct {
 // The reader will only access bits from position leftPadd to (element size - rightPadd).
 //
 // Panics if leftPadd + rightPadd >= element bit size, as this would leave no valid bits to read.
-func NewBitReader[T IntegerType](data []T, leftPadd, rightPadd int) *BitReader[T] {
+func NewBitReader[T Unsigned](data []T, leftPadd, rightPadd int) *BitReader[T] {
 	var zero T
 	size := int(unsafe.Sizeof(zero)) * 8
 	if leftPadd+rightPadd >= size {
@@ -125,7 +125,7 @@ func (r *BitReader[T]) right(bits, n int) (b uint64) {
 // BitWriter provides bit-level writing operations to integer slice data.
 // It treats the destination as a continuous bit stream, allowing precise bit insertion.
 // BitWriter is safe for concurrent use.
-type BitWriter[T IntegerType] struct {
+type BitWriter[T Unsigned] struct {
 	mu   *sync.Mutex
 	data []T // Destination data to write bits into
 	bits int // Total number of bits written so far
@@ -141,7 +141,7 @@ type BitWriter[T IntegerType] struct {
 // The writer will only write bits to the valid range between paddings.
 //
 // Panics if leftPadd + rightPadd >= element bit size, as this would leave no valid bits to write.
-func NewBitWriter[T IntegerType](leftPadd, rightPadd int) *BitWriter[T] {
+func NewBitWriter[T Unsigned](leftPadd, rightPadd int) *BitWriter[T] {
 	var zero T
 	size := int(unsafe.Sizeof(zero)) * 8
 	if leftPadd+rightPadd >= size {
