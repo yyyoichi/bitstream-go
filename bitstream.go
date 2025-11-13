@@ -49,52 +49,52 @@ func (r *BitReader[T]) SetBits(bits int) {
 	r.bits = bits
 }
 
-// U8R reads a specified number of bits from the n-th position in the data.
+// Read8R reads a specified number of bits from the n-th position in the data.
 // bits specifies how many bits to read (up to 8 bits).
 // n specifies which block to read (0-indexed).
 // Returns the bits as a uint16 value, right-aligned (LSB-aligned).
 //
 // Panics if bits > 8, as uint16 can only hold 8 bits.
-func (r *BitReader[T]) U8R(bits, n int) uint8 {
+func (r *BitReader[T]) Read8R(bits, n int) uint8 {
 	if bits > 8 {
 		panic("bitstream: cannot read more than 8 bits into uint16")
 	}
 	return uint8(r.right(bits, n))
 }
 
-// U16R reads a specified number of bits from the n-th position in the data.
+// Read16R reads a specified number of bits from the n-th position in the data.
 // bits specifies how many bits to read (up to 16 bits).
 // n specifies which block to read (0-indexed).
 // Returns the bits as a uint16 value, right-aligned (LSB-aligned).
 //
 // Panics if bits > 16, as uint16 can only hold 16 bits.
-func (r *BitReader[T]) U16R(bits, n int) (b uint16) {
+func (r *BitReader[T]) Read16R(bits, n int) (b uint16) {
 	if bits > 16 {
 		panic("bitstream: cannot read more than 16 bits into uint16")
 	}
 	return uint16(r.right(bits, n))
 }
 
-// U32R reads a specified number of bits from the n-th position in the data.
+// Read32R reads a specified number of bits from the n-th position in the data.
 // bits specifies how many bits to read (up to 32 bits).
 // n specifies which block to read (0-indexed).
 // Returns the bits as a uint16 value, right-aligned (LSB-aligned).
 //
 // Panics if bits > 32, as uint16 can only hold 32 bits.
-func (r *BitReader[T]) U32R(bits, n int) (b uint32) {
+func (r *BitReader[T]) Read32R(bits, n int) (b uint32) {
 	if bits > 32 {
 		panic("bitstream: cannot read more than 32 bits into uint16")
 	}
 	return uint32(r.right(bits, n))
 }
 
-// U64R reads a specified number of bits from the n-th position in the data.
+// Read64R reads a specified number of bits from the n-th position in the data.
 // bits specifies how many bits to read (up to 64 bits).
 // n specifies which block to read (0-indexed).
 // Returns the bits as a uint16 value, right-aligned (LSB-aligned).
 //
 // Panics if bits > 64, as uint16 can only hold 64 bits.
-func (r *BitReader[T]) U64R(bits, n int) (b uint64) {
+func (r *BitReader[T]) Read64R(bits, n int) (b uint64) {
 	if bits > 64 {
 		panic("bitstream: cannot read more than 64 bits into uint16")
 	}
@@ -159,12 +159,12 @@ func NewBitWriter[T Unsigned](leftPadd, rightPadd int) *BitWriter[T] {
 	}
 }
 
-// U8 writes the specified bits from a uint8 value to the stream.
+// Write8 writes the specified bits from a uint8 value to the stream.
 // leftPadd specifies how many upper bits to skip in the source data.
 // bits specifies how many bits to write after skipping leftPadd bits.
 //
 // Panics if leftPadd + bits > 8.
-func (w *BitWriter[T]) U8(leftPadd, bits int, data uint8) {
+func (w *BitWriter[T]) Write8(leftPadd, bits int, data uint8) {
 	if leftPadd+bits > 8 {
 		panic("bitstream: padding and bits exceed uint8 size")
 	}
@@ -175,12 +175,12 @@ func (w *BitWriter[T]) U8(leftPadd, bits int, data uint8) {
 	}
 }
 
-// U16 writes the specified bits from a uint16 value to the stream.
+// Write16 writes the specified bits from a uint16 value to the stream.
 // leftPadd specifies how many upper bits to skip in the source data.
 // bits specifies how many bits to write after skipping leftPadd bits.
 //
 // Panics if leftPadd + bits > 16.
-func (w *BitWriter[T]) U16(leftPadd, bits int, data uint16) {
+func (w *BitWriter[T]) Write16(leftPadd, bits int, data uint16) {
 	if leftPadd+bits > 16 {
 		panic("bitstream: padding and bits exceed uint16 size")
 	}
@@ -191,12 +191,12 @@ func (w *BitWriter[T]) U16(leftPadd, bits int, data uint16) {
 	}
 }
 
-// U32 writes the specified bits from a uint32 value to the stream.
+// Write32 writes the specified bits from a uint32 value to the stream.
 // leftPadd specifies how many upper bits to skip in the source data.
 // bits specifies how many bits to write after skipping leftPadd bits.
 //
 // Panics if leftPadd + bits > 32.
-func (w *BitWriter[T]) U32(leftPadd, bits int, data uint32) {
+func (w *BitWriter[T]) Write32(leftPadd, bits int, data uint32) {
 	if leftPadd+bits > 32 {
 		panic("bitstream: padding and bits exceed uint32 size")
 	}
@@ -207,12 +207,12 @@ func (w *BitWriter[T]) U32(leftPadd, bits int, data uint32) {
 	}
 }
 
-// U64 writes the specified bits from a uint64 value to the stream.
+// Write64 writes the specified bits from a uint64 value to the stream.
 // leftPadd specifies how many upper bits to skip in the source data.
 // bits specifies how many bits to write after skipping leftPadd bits.
 //
 // Panics if leftPadd + bits > 64.
-func (w *BitWriter[T]) U64(leftPadd, bits int, data uint64) {
+func (w *BitWriter[T]) Write64(leftPadd, bits int, data uint64) {
 	if leftPadd+bits > 64 {
 		panic("bitstream: padding and bits exceed uint64 size")
 	}
@@ -223,8 +223,8 @@ func (w *BitWriter[T]) U64(leftPadd, bits int, data uint64) {
 	}
 }
 
-// Bool writes a single boolean value as one bit to the stream.
-func (w *BitWriter[T]) Bool(data bool) {
+// WriteBool writes a single boolean value as one bit to the stream.
+func (w *BitWriter[T]) WriteBool(data bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.write(data)
