@@ -230,17 +230,17 @@ func (w *BitWriter[T]) WriteBool(data bool) {
 	w.write(data)
 }
 
-// Data returns the accumulated data and the total number of bits written.
-// The returned slice and bit count reflect all bits written so far.
+// Data returns the accumulated data slice.
+// Use Bits() to get the total number of valid bits written.
 func (w *BitWriter[T]) Data() []T {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.data
 }
 
-// AnyData returns the accumulated data as an any type and the total number of bits written.
-// The returned slice and bit count reflect all bits written so far.
+// AnyData returns the accumulated data as an any type.
 // This is useful when the exact type of the underlying data slice is not known at compile time.
+// Use Bits() to get the total number of valid bits written.
 func (w *BitWriter[T]) AnyData() any {
 	w.mu.Lock()
 	defer w.mu.Unlock()
