@@ -1,6 +1,9 @@
 package bitstream
 
-import "testing"
+import (
+	"io"
+	"testing"
+)
 
 func TestBitReader(t *testing.T) {
 	t.Run("right", func(t *testing.T) {
@@ -128,14 +131,14 @@ func TestBitReader(t *testing.T) {
 			}
 		}
 	})
-	t.Run("U16R_panic", func(t *testing.T) {
+	t.Run("Read16R_panic", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("expected panic when bits > 16")
 			}
 		}()
 		reader := NewBitReader([]uint8{0xFF, 0xFF, 0xFF}, 0, 0)
-		reader.right(17, 0) // Should panic
+		reader.Read16R(17, 0) // Should panic
 	})
 
 	t.Run("SetBits", func(t *testing.T) {
@@ -147,29 +150,331 @@ func TestBitReader(t *testing.T) {
 			t.Errorf("SetBits or right failed: got %08b; want %08b", r, 0b11111000)
 		}
 	})
+
+	t.Run("ReadBit", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 0, 0)
+
+		expected := []bool{
+			true, false, true, false, true, true, false, false,
+			true, true, true, false, false, false, true, true,
+		}
+
+		for i, want := range expected {
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != want {
+				t.Errorf("ReadBit() at pos %d = %v; want %v", i, bit, want)
+			}
+			if reader.Pos() != i+1 {
+				t.Errorf("Pos() after ReadBit() at pos %d = %d; want %d", i, reader.Pos(), i+1)
+			}
+		}
+
+		// Read beyond the end
+		bit, err := reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() beyond end should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBit() beyond end = %v; want false", bit)
+		}
+	})
+
+	t.Run("ReadBit_withPadding", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 1, 1)
+
+		// With lp=1, rp=1: each byte has 6 valid bits
+		// 0b10101100 -> 010110 (skip MSB bit 7 and LSB bit 0)
+		// 0b11100011 -> 110001 (skip MSB bit 7 and LSB bit 0)
+		expected := []bool{
+			false, true, false, true, true, false,
+			true, true, false, false, false, true,
+		}
+
+		for i, want := range expected {
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != want {
+				t.Errorf("ReadBit() at pos %d = %v; want %v", i, bit, want)
+			}
+		}
+	})
+
+	t.Run("ReadBitAt", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 0, 0)
+
+		tests := []struct {
+			pos  int
+			want bool
+		}{
+			{0, true},
+			{1, false},
+			{2, true},
+			{3, false},
+			{4, true},
+			{5, true},
+			{6, false},
+			{7, false},
+			{8, true},
+			{9, true},
+			{10, true},
+			{11, false},
+			{12, false},
+			{13, false},
+			{14, true},
+			{15, true},
+		}
+
+		for _, tt := range tests {
+			bit, err := reader.ReadBitAt(tt.pos)
+			if err != nil {
+				t.Errorf("ReadBitAt(%d) returned error: %v", tt.pos, err)
+			}
+			if bit != tt.want {
+				t.Errorf("ReadBitAt(%d) = %v; want %v", tt.pos, bit, tt.want)
+			}
+			// Verify cursor didn't move
+			if reader.Pos() != 0 {
+				t.Errorf("Pos() after ReadBitAt(%d) = %d; want 0", tt.pos, reader.Pos())
+			}
+		}
+
+		// Test reading out of bounds
+		bit, err := reader.ReadBitAt(16)
+		if err != io.EOF {
+			t.Errorf("ReadBitAt(16) should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(16) = %v; want false", bit)
+		}
+		bit, err = reader.ReadBitAt(100)
+		if err != io.EOF {
+			t.Errorf("ReadBitAt(100) should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(100) = %v; want false", bit)
+		}
+
+		// Test negative position
+		bit, err = reader.ReadBitAt(-1)
+		if err != ErrNegativePosition {
+			t.Errorf("ReadBitAt(-1) should return ErrNegativePosition, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(-1) = %v; want false", bit)
+		}
+	})
+
+	t.Run("ReadBitAt_withPadding", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 1, 1)
+
+		// With lp=1, rp=1: each byte has 6 valid bits
+		// 0b10101100 -> 010110 (skip MSB bit 7 and LSB bit 0)
+		// 0b11100011 -> 110001 (skip MSB bit 7 and LSB bit 0)
+		tests := []struct {
+			pos  int
+			want bool
+		}{
+			{0, false},
+			{1, true},
+			{2, false},
+			{3, true},
+			{4, true},
+			{5, false},
+			{6, true},
+			{7, true},
+			{8, false},
+			{9, false},
+			{10, false},
+			{11, true},
+		}
+
+		for _, tt := range tests {
+			bit, err := reader.ReadBitAt(tt.pos)
+			if err != nil {
+				t.Errorf("ReadBitAt(%d) returned error: %v", tt.pos, err)
+			}
+			if bit != tt.want {
+				t.Errorf("ReadBitAt(%d) = %v; want %v", tt.pos, bit, tt.want)
+			}
+			// Verify cursor didn't move
+			if reader.Pos() != 0 {
+				t.Errorf("Pos() after ReadBitAt(%d) = %d; want 0", tt.pos, reader.Pos())
+			}
+		}
+
+		// Test reading out of bounds (12 valid bits total)
+		bit, err := reader.ReadBitAt(12)
+		if err != io.EOF {
+			t.Errorf("ReadBitAt(12) should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(12) = %v; want false", bit)
+		}
+
+		// Test negative position
+		bit, err = reader.ReadBitAt(-1)
+		if err != ErrNegativePosition {
+			t.Errorf("ReadBitAt(-1) should return ErrNegativePosition, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(-1) = %v; want false", bit)
+		}
+	})
+
+	t.Run("Seek", func(t *testing.T) {
+		reader := NewBitReader([]uint8{0b10101100}, 0, 0)
+
+		// Seek to middle
+		err := reader.Seek(4)
+		if err != nil {
+			t.Errorf("Seek(4) returned error: %v", err)
+		}
+		if reader.Pos() != 4 {
+			t.Errorf("Pos() after Seek(4) = %d; want 4", reader.Pos())
+		}
+
+		// Read from new position
+		bit, err := reader.ReadBit()
+		if err != nil {
+			t.Errorf("ReadBit() after Seek(4) returned error: %v", err)
+		}
+		if bit != true {
+			t.Errorf("ReadBit() after Seek(4) = %v; want true", bit)
+		}
+
+		// Seek to start
+		err = reader.Seek(0)
+		if err != nil {
+			t.Errorf("Seek(0) returned error: %v", err)
+		}
+		if reader.Pos() != 0 {
+			t.Errorf("Pos() after Seek(0) = %d; want 0", reader.Pos())
+		}
+
+		// Seek to end (at the boundary) - should succeed
+		err = reader.Seek(8)
+		if err != nil {
+			t.Errorf("Seek(8) returned error: %v", err)
+		}
+		if reader.Pos() != 8 {
+			t.Errorf("Pos() after Seek(8) = %d; want 8", reader.Pos())
+		}
+		bit, err = reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() after Seek(8) should return io.EOF, got %v", err)
+		}
+
+		// Seek beyond end - should succeed (permissive like Go's standard library)
+		err = reader.Seek(100)
+		if err != nil {
+			t.Errorf("Seek(100) returned error: %v", err)
+		}
+		if reader.Pos() != 100 {
+			t.Errorf("Pos() after Seek(100) = %d; want 100", reader.Pos())
+		}
+		// Read after seeking beyond end should return io.EOF
+		bit, err = reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() after Seek(100) should return io.EOF, got %v", err)
+		}
+
+		// Seek to negative position should return error
+		err = reader.Seek(-1)
+		if err != ErrNegativePosition {
+			t.Errorf("Seek(-1) should return ErrNegativePosition, got %v", err)
+		}
+		// Position should not change when Seek fails
+		if reader.Pos() != 100 {
+			t.Errorf("Pos() after failed Seek(-1) = %d; want 100", reader.Pos())
+		}
+	})
+
+	t.Run("ReadBit_and_ReadBitAt_consistency", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 0, 0)
+
+		// Read sequentially and compare with random access
+		for i := range 16 {
+			bitAt, err := reader.ReadBitAt(i)
+			if err != nil {
+				t.Errorf("ReadBitAt(%d) returned error: %v", i, err)
+			}
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != bitAt {
+				t.Errorf("ReadBit() and ReadBitAt(%d) mismatch: %v vs %v", i, bit, bitAt)
+			}
+		}
+	})
+
+	t.Run("ReadBit_with_SetBits", func(t *testing.T) {
+		reader := NewBitReader([]uint8{0b11111111}, 0, 0)
+		reader.SetBits(5)
+
+		// Should only be able to read 5 bits
+		for i := range 5 {
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != true {
+				t.Errorf("ReadBit() at pos %d = %v; want true", i, bit)
+			}
+		}
+
+		// 6th bit should cause error
+		bit, err := reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() at pos 5 should return io.EOF after SetBits(5), got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBit() at pos 5 = %v; want false", bit)
+		}
+	})
 }
 
 func TestBitWriter(t *testing.T) {
-	t.Run("writeU8", func(t *testing.T) {
+	t.Run("Write8", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
-		writer.U8(0, 8, 255)
-		if writer.bits != 8 {
-			t.Errorf("expected bits to be 8, got %d", writer.bits)
+		writer.Write8(0, 8, 255)
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint64(255)<<56 {
 			t.Errorf("expected data[0] to be %08b, got %08b", uint64(255)<<56, writer.data[0])
 		}
-		writer.U8(1, 7, 255)
-		if writer.bits != 15 {
-			t.Errorf("expected bits to be 15, got %d", writer.bits)
+		writer.Write8(1, 7, 255)
+		if writer.Bits() != 15 {
+			t.Errorf("expected bits to be 15, got %d", writer.Bits())
 		}
 		if writer.data[0] != (uint64(255)<<56)|(uint64(127)<<49) {
 			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(255)<<56)|(uint64(127)<<49), writer.data[0])
 		}
-		writer.U8(0, 8, 0)
-		writer.U8(6, 1, 255)
-		if writer.bits != 24 {
-			t.Errorf("expected bits to be 24, got %d", writer.bits)
+		writer.Write8(0, 8, 0)
+		writer.Write8(6, 1, 255)
+		if writer.Bits() != 24 {
+			t.Errorf("expected bits to be 24, got %d", writer.Bits())
 		}
 		if writer.data[0] != (uint64(255)<<56)|(uint64(127)<<49)|(uint64(0b0)<<41)|(uint64(0b1)<<40) {
 			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(255)<<56)|(uint64(127)<<49)|(uint64(0b0)<<41)|(uint64(0b1)<<40), writer.data[0])
@@ -178,26 +483,26 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 1 element in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("write16", func(t *testing.T) {
+	t.Run("Write16", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
-		writer.U16(0, 16, 65535)
-		if writer.bits != 16 {
-			t.Errorf("expected bits to be 16, got %d", writer.bits)
+		writer.Write16(0, 16, 65535)
+		if writer.Bits() != 16 {
+			t.Errorf("expected bits to be 16, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint64(65535)<<48 {
 			t.Errorf("expected data[0] to be %08b, got %08b", uint64(65535)<<48, writer.data[0])
 		}
-		writer.U16(2, 14, 65535)
-		if writer.bits != 30 {
-			t.Errorf("expected bits to be 30, got %d", writer.bits)
+		writer.Write16(2, 14, 65535)
+		if writer.Bits() != 30 {
+			t.Errorf("expected bits to be 30, got %d", writer.Bits())
 		}
 		if writer.data[0] != (uint64(65535)<<48)|(uint64(0x3FFF)<<34) {
 			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(65535)<<48)|(uint64(0x3FFF)<<34), writer.data[0])
 		}
-		writer.U16(0, 16, 0)
-		writer.U16(5, 2, 65535)
-		if writer.bits != 48 {
-			t.Errorf("expected bits to be 48, got %d", writer.bits)
+		writer.Write16(0, 16, 0)
+		writer.Write16(5, 2, 65535)
+		if writer.Bits() != 48 {
+			t.Errorf("expected bits to be 48, got %d", writer.Bits())
 		}
 		if writer.data[0] != (uint64(65535)<<48)|(uint64(0x3FFF)<<34)|(uint64(0b0)<<18)|(uint64(0b11)<<16) {
 			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(65535)<<48)|(uint64(0x3FFF)<<34)|(uint64(0b0)<<18)|(uint64(0b11)<<16), writer.data[0])
@@ -206,26 +511,26 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 1 element in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("write32", func(t *testing.T) {
+	t.Run("Write32", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
-		writer.U32(0, 32, 0xFFFFFFFF)
-		if writer.bits != 32 {
-			t.Errorf("expected bits to be 32, got %d", writer.bits)
+		writer.Write32(0, 32, 0xFFFFFFFF)
+		if writer.Bits() != 32 {
+			t.Errorf("expected bits to be 32, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint64(0xFFFFFFFF)<<32 {
 			t.Errorf("expected data[0] to be %08b, got %08b", uint64(0xFFFFFFFF)<<32, writer.data[0])
 		}
-		writer.U32(4, 28, 0xFFFFFFFF)
-		if writer.bits != 60 {
-			t.Errorf("expected bits to be 60, got %d", writer.bits)
+		writer.Write32(4, 28, 0xFFFFFFFF)
+		if writer.Bits() != 60 {
+			t.Errorf("expected bits to be 60, got %d", writer.Bits())
 		}
 		if writer.data[0] != (uint64(0xFFFFFFFF)<<32)|(uint64(0x0FFFFFFF)<<4) {
 			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(0xFFFFFFFF)<<32)|(uint64(0x0FFFFFFF)<<4), writer.data[0])
 		}
-		writer.U32(0, 32, 0)
-		writer.U32(10, 4, 0xFFFFFFFF)
-		if writer.bits != 96 {
-			t.Errorf("expected bits to be 96, got %d", writer.bits)
+		writer.Write32(0, 32, 0)
+		writer.Write32(10, 4, 0xFFFFFFFF)
+		if writer.Bits() != 96 {
+			t.Errorf("expected bits to be 96, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint64(0xFFFFFFFF)<<32|(uint64(0xFFFFFFF)<<4) {
 			t.Errorf("expected data[0] to be %064b, got %064b", uint64(0xFFFFFFFF)<<32|(uint64(0xFFFFFFF)<<4), writer.data[0])
@@ -237,18 +542,18 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 2 elements in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("write64", func(t *testing.T) {
+	t.Run("Write64", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
-		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
-		if writer.bits != 64 {
-			t.Errorf("expected bits to be 64, got %d", writer.bits)
+		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 64 {
+			t.Errorf("expected bits to be 64, got %d", writer.Bits())
 		}
 		if writer.data[0] != 0xFFFFFFFFFFFFFFFF {
 			t.Errorf("expected data[0] to be %016x, got %016x", uint64(0xFFFFFFFFFFFFFFFF), writer.data[0])
 		}
-		writer.U64(8, 56, 0xFFFFFFFFFFFFFFFF)
-		if writer.bits != 120 {
-			t.Errorf("expected bits to be 120, got %d", writer.bits)
+		writer.Write64(8, 56, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 120 {
+			t.Errorf("expected bits to be 120, got %d", writer.Bits())
 		}
 		if len(writer.data) != 2 {
 			t.Errorf("expected 2 elements in data, got %d", len(writer.data))
@@ -256,10 +561,10 @@ func TestBitWriter(t *testing.T) {
 		if writer.data[1] != uint64(0x00FFFFFFFFFFFFFF)<<8 {
 			t.Errorf("expected data[1] to be %016x, got %016x", uint64(0x00FFFFFFFFFFFFFF)<<8, writer.data[1])
 		}
-		writer.U64(0, 64, 0)
-		writer.U64(20, 8, 0xFFFFFFFFFFFFFFFF)
-		if writer.bits != 192 {
-			t.Errorf("expected bits to be 192, got %d", writer.bits)
+		writer.Write64(0, 64, 0)
+		writer.Write64(20, 8, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 192 {
+			t.Errorf("expected bits to be 192, got %d", writer.Bits())
 		}
 		if writer.data[1] != uint64(0x00FFFFFFFFFFFFFF)<<8 {
 			t.Errorf("expected data[1] to be %016x, got %016x", uint64(0x00FFFFFFFFFFFFFF)<<8, writer.data[1])
@@ -271,19 +576,19 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 3 elements in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("writeBool", func(t *testing.T) {
+	t.Run("WriteBool", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
-		writer.Bool(true)
-		if writer.bits != 1 {
-			t.Errorf("expected bits to be 1, got %d", writer.bits)
+		writer.WriteBool(true)
+		if writer.Bits() != 1 {
+			t.Errorf("expected bits to be 1, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint64(1)<<63 {
 			t.Errorf("expected data[0] to be %08b, got %08b", uint64(1)<<63, writer.data[0])
 		}
-		writer.Bool(false)
-		writer.Bool(true)
-		if writer.bits != 3 {
-			t.Errorf("expected bits to be 2, got %d", writer.bits)
+		writer.WriteBool(false)
+		writer.WriteBool(true)
+		if writer.Bits() != 3 {
+			t.Errorf("expected bits to be 2, got %d", writer.Bits())
 		}
 		if writer.data[0] != (uint64(1)<<63)|(uint64(01)<<61) {
 			t.Errorf("expected data[0] to be %08b, got %08b", (uint64(1)<<63)|(uint64(0)<<61), writer.data[0])
@@ -291,9 +596,9 @@ func TestBitWriter(t *testing.T) {
 	})
 	t.Run("writeWithPadding", func(t *testing.T) {
 		writer := NewBitWriter[uint8](1, 0)
-		writer.U8(0, 8, 0xFF)
-		if writer.bits != 8 {
-			t.Errorf("expected bits to be 8, got %d", writer.bits)
+		writer.Write8(0, 8, 0xFF)
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint8(0b01111111) {
 			t.Errorf("expected data[0] to be %08b, got %08b", uint8(0b01111111), writer.data[0])
@@ -302,9 +607,9 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected data[1] to be %08b, got %08b", uint8(0b01000000), writer.data[1])
 		}
 		writer = NewBitWriter[uint8](1, 2)
-		writer.U8(0, 8, 0xFF)
-		if writer.bits != 8 {
-			t.Errorf("expected bits to be 8, got %d", writer.bits)
+		writer.Write8(0, 8, 0xFF)
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
 		}
 		if writer.data[0] != uint8(0b01111100) {
 			t.Errorf("expected data[0] to be %08b, got %08b", uint8(0b01111100), writer.data[0])
@@ -315,10 +620,10 @@ func TestBitWriter(t *testing.T) {
 	})
 	t.Run("Data_uint8", func(t *testing.T) {
 		writer := NewBitWriter[uint8](0, 0)
-		writer.U16(0, 16, 0xFFFF)
-		data, bits := writer.Data()
-		if bits != 16 {
-			t.Errorf("expected bits to be 16, got %d", bits)
+		writer.Write16(0, 16, 0xFFFF)
+		data := writer.Data()
+		if writer.Bits() != 16 {
+			t.Errorf("expected writer.Bits() to be 16, got %d", writer.Bits())
 		}
 		if len(data) != 2 {
 			t.Errorf("expected data length to be 2, got %d", len(data))
@@ -330,11 +635,11 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected data[1] to be %08b, got %08b", 0xFF, data[1])
 		}
 		writer = NewBitWriter[uint8](1, 1)
-		writer.U16(0, 16, 0xFFFF)
-		data, bits = writer.Data()
-		if bits != 16+3+2 {
-			t.Errorf("expected bits to be 21, got %d", bits)
+		writer.Write16(0, 16, 0xFFFF)
+		if writer.Bits() != 16 {
+			t.Errorf("expected writer.Bits() to be 16, got %d", writer.Bits())
 		}
+		data = writer.Data()
 		if len(data) != 3 {
 			t.Errorf("expected data length to be 3, got %d", len(data))
 		}
@@ -350,11 +655,11 @@ func TestBitWriter(t *testing.T) {
 	})
 	t.Run("Data_uint16", func(t *testing.T) {
 		writer := NewBitWriter[uint16](0, 0)
-		writer.U32(0, 32, 0xFFFFFFFF)
-		data, bits := writer.Data()
-		if bits != 32 {
-			t.Errorf("expected bits to be 32, got %d", bits)
+		writer.Write32(0, 32, 0xFFFFFFFF)
+		if writer.Bits() != 32 {
+			t.Errorf("expected writer.Bits() to be 32, got %d", writer.Bits())
 		}
+		data := writer.Data()
 		if len(data) != 2 {
 			t.Errorf("expected data length to be 2, got %d", len(data))
 		}
@@ -365,11 +670,11 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected data[1] to be %016b, got %016b", 0xFFFF, data[1])
 		}
 		writer = NewBitWriter[uint16](2, 2)
-		writer.U32(0, 32, 0xFFFFFFFF)
-		data, bits = writer.Data()
-		if bits != 32+6+4 {
-			t.Errorf("expected bits to be 42, got %d", bits)
+		writer.Write32(0, 32, 0xFFFFFFFF)
+		if writer.Bits() != 32 {
+			t.Errorf("expected writer.Bits() to be 32, got %d", writer.Bits())
 		}
+		data = writer.Data()
 		if len(data) != 3 {
 			t.Errorf("expected data length to be 3, got %d", len(data))
 		}
@@ -379,11 +684,11 @@ func TestBitWriter(t *testing.T) {
 	})
 	t.Run("Data_uint32", func(t *testing.T) {
 		writer := NewBitWriter[uint32](0, 0)
-		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
-		data, bits := writer.Data()
-		if bits != 64 {
-			t.Errorf("expected bits to be 64, got %d", bits)
+		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 64 {
+			t.Errorf("expected writer.Bits() to be 64, got %d", writer.Bits())
 		}
+		data := writer.Data()
 		if len(data) != 2 {
 			t.Errorf("expected data length to be 2, got %d", len(data))
 		}
@@ -394,11 +699,11 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected data[1] to be %032b, got %032b", 0xFFFFFFFF, data[1])
 		}
 		writer = NewBitWriter[uint32](4, 4)
-		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
-		data, bits = writer.Data()
-		if bits != 64+12+8 {
-			t.Errorf("expected bits to be 88, got %d", bits)
+		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 64 {
+			t.Errorf("expected writer.Bits() to be 64, got %d", writer.Bits())
 		}
+		data = writer.Data()
 		if len(data) != 3 {
 			t.Errorf("expected data length to be 3, got %d", len(data))
 		}
@@ -414,12 +719,12 @@ func TestBitWriter(t *testing.T) {
 	})
 	t.Run("Data_uint64", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
-		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
-		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
-		data, bits := writer.Data()
-		if bits != 128 {
-			t.Errorf("expected bits to be 128, got %d", bits)
+		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 128 {
+			t.Errorf("expected writer.Bits() to be 128, got %d", writer.Bits())
 		}
+		data := writer.Data()
 		if len(data) != 2 {
 			t.Errorf("expected data length to be 2, got %d", len(data))
 		}
@@ -431,11 +736,11 @@ func TestBitWriter(t *testing.T) {
 		}
 
 		writer = NewBitWriter[uint64](8, 8)
-		writer.U64(0, 64, 0xFFFFFFFFFFFFFFFF)
-		data, bits = writer.Data()
-		if bits != 64+16+8 {
-			t.Errorf("expected bits to be 88, got %d", bits)
+		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
+		if writer.Bits() != 64 {
+			t.Errorf("expected writer.Bits() to be 64, got %d", writer.Bits())
 		}
+		data = writer.Data()
 		if len(data) != 2 {
 			t.Errorf("expected data length to be 2, got %d", len(data))
 		}
@@ -444,6 +749,202 @@ func TestBitWriter(t *testing.T) {
 		}
 		if data[1] != uint64(0x00FFFF)<<40 {
 			t.Errorf("expected data[1] to be %064b, got %064b", uint64(0x00FFFF)<<40, data[1])
+		}
+	})
+
+	t.Run("WriteBit", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write a pattern: 10101100
+		pattern := []bool{true, false, true, false, true, true, false, false}
+		for i, bit := range pattern {
+			err := writer.WriteBit(bit)
+			if err != nil {
+				t.Errorf("WriteBit() at pos %d returned error: %v", i, err)
+			}
+			if writer.Pos() != i+1 {
+				t.Errorf("Pos() after WriteBit() at pos %d = %d; want %d", i, writer.Pos(), i+1)
+			}
+		}
+
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
+		}
+		data := writer.Data()
+		if len(data) != 1 {
+			t.Errorf("expected data length to be 1, got %d", len(data))
+		}
+		if data[0] != 0b10101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b10101100, data[0])
+		}
+	})
+
+	t.Run("WriteBit_withPadding", func(t *testing.T) {
+		writer := NewBitWriter[uint8](1, 1)
+
+		// Write 6 bits: 010110
+		pattern := []bool{false, true, false, true, true, false}
+		for _, bit := range pattern {
+			err := writer.WriteBit(bit)
+			if err != nil {
+				t.Errorf("WriteBit() returned error: %v", err)
+			}
+		}
+
+		if writer.Bits() != 6 {
+			t.Errorf("expected bits to be 6, got %d", writer.Bits())
+		}
+		data := writer.Data()
+		// With lp=1, rp=1: 6 bits per byte
+		// 010110 should be stored as 0010110_0 (0 = padding)
+		if len(data) != 1 {
+			t.Errorf("expected data length to be 1, got %d", len(data))
+		}
+		if data[0] != 0b00101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b00101100, data[0])
+		}
+	})
+
+	t.Run("WriteBitAt", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write bits at specific positions
+		tests := []struct {
+			pos int
+			bit bool
+		}{
+			{0, true},
+			{2, true},
+			{4, true},
+			{5, true},
+			{7, false},
+		}
+
+		for _, tt := range tests {
+			err := writer.WriteBitAt(tt.pos, tt.bit)
+			if err != nil {
+				t.Errorf("WriteBitAt(%d, %v) returned error: %v", tt.pos, tt.bit, err)
+			}
+			// Verify cursor didn't move
+			if writer.Pos() != 0 {
+				t.Errorf("Pos() after WriteBitAt(%d) = %d; want 0", tt.pos, writer.Pos())
+			}
+		}
+
+		// Result should be: 10101100
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
+		}
+		data := writer.Data()
+		if data[0] != 0b10101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b10101100, data[0])
+		}
+	})
+
+	t.Run("WriteBitAt_overwrite", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write all ones first
+		for i := range 8 {
+			writer.WriteBitAt(i, true)
+		}
+		if writer.Data()[0] != 0xFF {
+			t.Errorf("expected data[0] to be 0xFF, got %08b", writer.Data()[0])
+		}
+
+		// Overwrite some bits to zero
+		writer.WriteBitAt(1, false)
+		writer.WriteBitAt(3, false)
+		writer.WriteBitAt(6, false)
+		writer.WriteBitAt(7, false)
+
+		// Result should be: 10101100
+		data := writer.Data()
+		if data[0] != 0b10101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b10101100, data[0])
+		}
+	})
+
+	t.Run("Seek_Writer", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write some bits
+		writer.WriteBit(true)
+		writer.WriteBit(false)
+		writer.WriteBit(true)
+
+		if writer.Pos() != 3 {
+			t.Errorf("Pos() after 3 WriteBit = %d; want 3", writer.Pos())
+		}
+		if writer.Bits() != 3 {
+			t.Errorf("Bits() after 3 WriteBit = %d; want 3", writer.Bits())
+		}
+
+		// Seek to start
+		err := writer.Seek(0)
+		if err != nil {
+			t.Errorf("Seek(0) returned error: %v", err)
+		}
+		if writer.Pos() != 0 {
+			t.Errorf("Pos() after Seek(0) = %d; want 0", writer.Pos())
+		}
+
+		// Overwrite first bit
+		writer.WriteBit(false)
+		if writer.Pos() != 1 {
+			t.Errorf("Pos() after WriteBit = %d; want 1", writer.Pos())
+		}
+		// 0b10100000 -> 0b00100000
+
+		// Seek to middle
+		err = writer.Seek(5)
+		if err != nil {
+			t.Errorf("Seek(5) returned error: %v", err)
+		}
+		if writer.Bits() != 3 {
+			t.Errorf("Bits() after Seek(5) = %d; want 3", writer.Bits())
+		}
+		writer.WriteBit(true)
+		writer.WriteBit(true)
+		if writer.Bits() != 7 {
+			t.Errorf("Bits() after 2 more WriteBit = %d; want 7", writer.Bits())
+		}
+		// 0b00100000 -> 0b00100110
+
+		// Result should be: 0b00100110
+		data := writer.Data()
+		if data[0] != 0b00100110 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b00100110, data[0])
+		}
+
+		// Seek to negative position should return error
+		err = writer.Seek(-1)
+		if err != ErrNegativePosition {
+			t.Errorf("Seek(-1) should return ErrNegativePosition, got %v", err)
+		}
+	})
+
+	t.Run("WriteBit_and_WriteBitAt_consistency", func(t *testing.T) {
+		writer1 := NewBitWriter[uint8](0, 0)
+		writer2 := NewBitWriter[uint8](0, 0)
+
+		pattern := []bool{true, false, true, false, true, true, false, false}
+
+		// Write sequentially with WriteBit
+		for _, bit := range pattern {
+			writer1.WriteBit(bit)
+		}
+
+		// Write at positions with WriteBitAt
+		for i, bit := range pattern {
+			writer2.WriteBitAt(i, bit)
+		}
+
+		// Both should produce the same result
+		data1 := writer1.Data()
+		data2 := writer2.Data()
+		if data1[0] != data2[0] {
+			t.Errorf("WriteBit and WriteBitAt produced different results: %08b vs %08b", data1[0], data2[0])
 		}
 	})
 }
