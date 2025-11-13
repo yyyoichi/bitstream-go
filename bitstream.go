@@ -178,6 +178,7 @@ type BitWriter[T Unsigned] struct {
 	msb  T   // MSB mask for the valid bit range
 	lp   int // Left padding bits
 	rp   int // Right padding bits
+	pos  int // Current write position (cursor)
 }
 
 // NewBitWriter creates a new BitWriter for writing bits to integer slice data.
@@ -201,6 +202,7 @@ func NewBitWriter[T Unsigned](leftPadd, rightPadd int) *BitWriter[T] {
 		msb:  T(1) << (size - leftPadd - 1),
 		lp:   leftPadd,
 		rp:   rightPadd,
+		pos:  0,
 	}
 }
 
@@ -297,12 +299,74 @@ func (r *BitWriter[T]) Bits() int {
 	return r.bits
 }
 
-func (w *BitWriter[T]) write(b bool) {
+// WriteBit writes one bit at the current position and advances the cursor.
+// Automatically extends the data slice if writing beyond current length.
+func (w *BitWriter[T]) WriteBit(bit bool) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writeBitAt(w.pos, bit)
+	w.pos++
+	if w.pos > w.bits {
+		w.bits = w.pos
+	}
+	return nil
+}
+
+// WriteBitAt writes one bit at the specified position without moving the cursor.
+// Automatically extends the data slice if writing beyond current length.
+func (w *BitWriter[T]) WriteBitAt(pos int, bit bool) error {
+	if pos < 0 {
+		return io.EOF
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.writeBitAt(pos, bit)
+	if pos >= w.bits {
+		w.bits = pos + 1
+	}
+	return nil
+}
+
+// Pos returns the current write position (cursor).
+func (w *BitWriter[T]) Pos() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.pos
+}
+
+// Seek sets the write position (cursor).
+// Allows seeking to any non-negative position, including beyond current data.
+// Returns an error only for negative positions.
+func (w *BitWriter[T]) Seek(pos int) error {
+	if pos < 0 {
+		return io.EOF
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.pos = pos
+	return nil
+}
+
+func (w *BitWriter[T]) writeBitAt(pos int, bit bool) {
+	idx := pos / w.s
+	// Extend data slice if necessary
+	for idx >= len(w.data) {
+		w.data = append(w.data, 0)
+	}
+	if bit {
+		w.data[idx] |= w.msb >> (pos % w.s)
+	} else {
+		// Clear the bit if it was previously set
+		w.data[idx] &^= w.msb >> (pos % w.s)
+	}
+}
+
+func (w *BitWriter[T]) write(bit bool) {
 	idx := w.bits / w.s
 	if idx >= len(w.data) {
 		w.data = append(w.data, 0)
 	}
-	if b {
+	if bit {
 		w.data[idx] |= w.msb >> (w.bits % w.s)
 	}
 	w.bits += 1

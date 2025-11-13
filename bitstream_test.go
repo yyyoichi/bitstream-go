@@ -733,4 +733,200 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected data[1] to be %064b, got %064b", uint64(0x00FFFF)<<40, data[1])
 		}
 	})
+
+	t.Run("WriteBit", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write a pattern: 10101100
+		pattern := []bool{true, false, true, false, true, true, false, false}
+		for i, bit := range pattern {
+			err := writer.WriteBit(bit)
+			if err != nil {
+				t.Errorf("WriteBit() at pos %d returned error: %v", i, err)
+			}
+			if writer.Pos() != i+1 {
+				t.Errorf("Pos() after WriteBit() at pos %d = %d; want %d", i, writer.Pos(), i+1)
+			}
+		}
+
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
+		}
+		data := writer.Data()
+		if len(data) != 1 {
+			t.Errorf("expected data length to be 1, got %d", len(data))
+		}
+		if data[0] != 0b10101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b10101100, data[0])
+		}
+	})
+
+	t.Run("WriteBit_withPadding", func(t *testing.T) {
+		writer := NewBitWriter[uint8](1, 1)
+
+		// Write 6 bits: 010110
+		pattern := []bool{false, true, false, true, true, false}
+		for _, bit := range pattern {
+			err := writer.WriteBit(bit)
+			if err != nil {
+				t.Errorf("WriteBit() returned error: %v", err)
+			}
+		}
+
+		if writer.Bits() != 6 {
+			t.Errorf("expected bits to be 6, got %d", writer.Bits())
+		}
+		data := writer.Data()
+		// With lp=1, rp=1: 6 bits per byte
+		// 010110 should be stored as 0010110_0 (0 = padding)
+		if len(data) != 1 {
+			t.Errorf("expected data length to be 1, got %d", len(data))
+		}
+		if data[0] != 0b00101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b00101100, data[0])
+		}
+	})
+
+	t.Run("WriteBitAt", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write bits at specific positions
+		tests := []struct {
+			pos int
+			bit bool
+		}{
+			{0, true},
+			{2, true},
+			{4, true},
+			{5, true},
+			{7, false},
+		}
+
+		for _, tt := range tests {
+			err := writer.WriteBitAt(tt.pos, tt.bit)
+			if err != nil {
+				t.Errorf("WriteBitAt(%d, %v) returned error: %v", tt.pos, tt.bit, err)
+			}
+			// Verify cursor didn't move
+			if writer.Pos() != 0 {
+				t.Errorf("Pos() after WriteBitAt(%d) = %d; want 0", tt.pos, writer.Pos())
+			}
+		}
+
+		// Result should be: 10101100
+		if writer.Bits() != 8 {
+			t.Errorf("expected bits to be 8, got %d", writer.Bits())
+		}
+		data := writer.Data()
+		if data[0] != 0b10101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b10101100, data[0])
+		}
+	})
+
+	t.Run("WriteBitAt_overwrite", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write all ones first
+		for i := range 8 {
+			writer.WriteBitAt(i, true)
+		}
+		if writer.Data()[0] != 0xFF {
+			t.Errorf("expected data[0] to be 0xFF, got %08b", writer.Data()[0])
+		}
+
+		// Overwrite some bits to zero
+		writer.WriteBitAt(1, false)
+		writer.WriteBitAt(3, false)
+		writer.WriteBitAt(6, false)
+		writer.WriteBitAt(7, false)
+
+		// Result should be: 10101100
+		data := writer.Data()
+		if data[0] != 0b10101100 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b10101100, data[0])
+		}
+	})
+
+	t.Run("Seek_Writer", func(t *testing.T) {
+		writer := NewBitWriter[uint8](0, 0)
+
+		// Write some bits
+		writer.WriteBit(true)
+		writer.WriteBit(false)
+		writer.WriteBit(true)
+
+		if writer.Pos() != 3 {
+			t.Errorf("Pos() after 3 WriteBit = %d; want 3", writer.Pos())
+		}
+		if writer.Bits() != 3 {
+			t.Errorf("Bits() after 3 WriteBit = %d; want 3", writer.Bits())
+		}
+
+		// Seek to start
+		err := writer.Seek(0)
+		if err != nil {
+			t.Errorf("Seek(0) returned error: %v", err)
+		}
+		if writer.Pos() != 0 {
+			t.Errorf("Pos() after Seek(0) = %d; want 0", writer.Pos())
+		}
+
+		// Overwrite first bit
+		writer.WriteBit(false)
+		if writer.Pos() != 1 {
+			t.Errorf("Pos() after WriteBit = %d; want 1", writer.Pos())
+		}
+		// 0b10100000 -> 0b00100000
+
+		// Seek to middle
+		err = writer.Seek(5)
+		if err != nil {
+			t.Errorf("Seek(5) returned error: %v", err)
+		}
+		if writer.Bits() != 3 {
+			t.Errorf("Bits() after Seek(5) = %d; want 3", writer.Bits())
+		}
+		writer.WriteBit(true)
+		writer.WriteBit(true)
+		if writer.Bits() != 7 {
+			t.Errorf("Bits() after 2 more WriteBit = %d; want 7", writer.Bits())
+		}
+		// 0b00100000 -> 0b00100110
+
+		// Result should be: 0b00100110
+		data := writer.Data()
+		if data[0] != 0b00100110 {
+			t.Errorf("expected data[0] to be %08b, got %08b", 0b00100110, data[0])
+		}
+
+		// Seek to negative position should return error
+		err = writer.Seek(-1)
+		if err == nil {
+			t.Error("Seek(-1) should return error")
+		}
+	})
+
+	t.Run("WriteBit_and_WriteBitAt_consistency", func(t *testing.T) {
+		writer1 := NewBitWriter[uint8](0, 0)
+		writer2 := NewBitWriter[uint8](0, 0)
+
+		pattern := []bool{true, false, true, false, true, true, false, false}
+
+		// Write sequentially with WriteBit
+		for _, bit := range pattern {
+			writer1.WriteBit(bit)
+		}
+
+		// Write at positions with WriteBitAt
+		for i, bit := range pattern {
+			writer2.WriteBitAt(i, bit)
+		}
+
+		// Both should produce the same result
+		data1 := writer1.Data()
+		data2 := writer2.Data()
+		if data1[0] != data2[0] {
+			t.Errorf("WriteBit and WriteBitAt produced different results: %08b vs %08b", data1[0], data2[0])
+		}
+	})
 }
