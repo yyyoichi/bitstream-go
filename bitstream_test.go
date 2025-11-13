@@ -1,6 +1,9 @@
 package bitstream
 
-import "testing"
+import (
+	"io"
+	"testing"
+)
 
 func TestBitReader(t *testing.T) {
 	t.Run("right", func(t *testing.T) {
@@ -145,6 +148,290 @@ func TestBitReader(t *testing.T) {
 		r := reader.right(8, 0)
 		if r != 0b11111000 {
 			t.Errorf("SetBits or right failed: got %08b; want %08b", r, 0b11111000)
+		}
+	})
+
+	t.Run("ReadBit", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 0, 0)
+
+		expected := []bool{
+			true, false, true, false, true, true, false, false,
+			true, true, true, false, false, false, true, true,
+		}
+
+		for i, want := range expected {
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != want {
+				t.Errorf("ReadBit() at pos %d = %v; want %v", i, bit, want)
+			}
+			if reader.Pos() != i+1 {
+				t.Errorf("Pos() after ReadBit() at pos %d = %d; want %d", i, reader.Pos(), i+1)
+			}
+		}
+
+		// Read beyond the end
+		bit, err := reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() beyond end should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBit() beyond end = %v; want false", bit)
+		}
+	})
+
+	t.Run("ReadBit_withPadding", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 1, 1)
+
+		// With lp=1, rp=1: each byte has 6 valid bits
+		// 0b10101100 -> 010110 (skip MSB bit 7 and LSB bit 0)
+		// 0b11100011 -> 110001 (skip MSB bit 7 and LSB bit 0)
+		expected := []bool{
+			false, true, false, true, true, false,
+			true, true, false, false, false, true,
+		}
+
+		for i, want := range expected {
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != want {
+				t.Errorf("ReadBit() at pos %d = %v; want %v", i, bit, want)
+			}
+		}
+	})
+
+	t.Run("ReadBitAt", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 0, 0)
+
+		tests := []struct {
+			pos  int
+			want bool
+		}{
+			{0, true},
+			{1, false},
+			{2, true},
+			{3, false},
+			{4, true},
+			{5, true},
+			{6, false},
+			{7, false},
+			{8, true},
+			{9, true},
+			{10, true},
+			{11, false},
+			{12, false},
+			{13, false},
+			{14, true},
+			{15, true},
+		}
+
+		for _, tt := range tests {
+			bit, err := reader.ReadBitAt(tt.pos)
+			if err != nil {
+				t.Errorf("ReadBitAt(%d) returned error: %v", tt.pos, err)
+			}
+			if bit != tt.want {
+				t.Errorf("ReadBitAt(%d) = %v; want %v", tt.pos, bit, tt.want)
+			}
+			// Verify cursor didn't move
+			if reader.Pos() != 0 {
+				t.Errorf("Pos() after ReadBitAt(%d) = %d; want 0", tt.pos, reader.Pos())
+			}
+		}
+
+		// Test reading out of bounds
+		bit, err := reader.ReadBitAt(16)
+		if err != io.EOF {
+			t.Errorf("ReadBitAt(16) should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(16) = %v; want false", bit)
+		}
+		bit, err = reader.ReadBitAt(100)
+		if err != io.EOF {
+			t.Errorf("ReadBitAt(100) should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(100) = %v; want false", bit)
+		}
+	})
+
+	t.Run("ReadBitAt_withPadding", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 1, 1)
+
+		// With lp=1, rp=1: each byte has 6 valid bits
+		// 0b10101100 -> 010110 (skip MSB bit 7 and LSB bit 0)
+		// 0b11100011 -> 110001 (skip MSB bit 7 and LSB bit 0)
+		tests := []struct {
+			pos  int
+			want bool
+		}{
+			{0, false},
+			{1, true},
+			{2, false},
+			{3, true},
+			{4, true},
+			{5, false},
+			{6, true},
+			{7, true},
+			{8, false},
+			{9, false},
+			{10, false},
+			{11, true},
+		}
+
+		for _, tt := range tests {
+			bit, err := reader.ReadBitAt(tt.pos)
+			if err != nil {
+				t.Errorf("ReadBitAt(%d) returned error: %v", tt.pos, err)
+			}
+			if bit != tt.want {
+				t.Errorf("ReadBitAt(%d) = %v; want %v", tt.pos, bit, tt.want)
+			}
+			// Verify cursor didn't move
+			if reader.Pos() != 0 {
+				t.Errorf("Pos() after ReadBitAt(%d) = %d; want 0", tt.pos, reader.Pos())
+			}
+		}
+
+		// Test reading out of bounds (12 valid bits total)
+		bit, err := reader.ReadBitAt(12)
+		if err != io.EOF {
+			t.Errorf("ReadBitAt(12) should return io.EOF, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(12) = %v; want false", bit)
+		}
+	})
+
+	t.Run("Seek", func(t *testing.T) {
+		reader := NewBitReader([]uint8{0b10101100}, 0, 0)
+
+		// Seek to middle
+		err := reader.Seek(4)
+		if err != nil {
+			t.Errorf("Seek(4) returned error: %v", err)
+		}
+		if reader.Pos() != 4 {
+			t.Errorf("Pos() after Seek(4) = %d; want 4", reader.Pos())
+		}
+
+		// Read from new position
+		bit, err := reader.ReadBit()
+		if err != nil {
+			t.Errorf("ReadBit() after Seek(4) returned error: %v", err)
+		}
+		if bit != true {
+			t.Errorf("ReadBit() after Seek(4) = %v; want true", bit)
+		}
+
+		// Seek to start
+		err = reader.Seek(0)
+		if err != nil {
+			t.Errorf("Seek(0) returned error: %v", err)
+		}
+		if reader.Pos() != 0 {
+			t.Errorf("Pos() after Seek(0) = %d; want 0", reader.Pos())
+		}
+
+		// Seek to end (at the boundary) - should succeed
+		err = reader.Seek(8)
+		if err != nil {
+			t.Errorf("Seek(8) returned error: %v", err)
+		}
+		if reader.Pos() != 8 {
+			t.Errorf("Pos() after Seek(8) = %d; want 8", reader.Pos())
+		}
+		bit, err = reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() after Seek(8) should return io.EOF, got %v", err)
+		}
+
+		// Seek beyond end - should succeed (permissive like Go's standard library)
+		err = reader.Seek(100)
+		if err != nil {
+			t.Errorf("Seek(100) returned error: %v", err)
+		}
+		if reader.Pos() != 100 {
+			t.Errorf("Pos() after Seek(100) = %d; want 100", reader.Pos())
+		}
+		// Read after seeking beyond end should return io.EOF
+		bit, err = reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() after Seek(100) should return io.EOF, got %v", err)
+		}
+
+		// Seek to negative position should return error
+		err = reader.Seek(-1)
+		if err == nil {
+			t.Error("Seek(-1) should return error")
+		}
+		// Position should not change when Seek fails
+		if reader.Pos() != 100 {
+			t.Errorf("Pos() after failed Seek(-1) = %d; want 100", reader.Pos())
+		}
+	})
+
+	t.Run("ReadBit_and_ReadBitAt_consistency", func(t *testing.T) {
+		reader := NewBitReader([]uint8{
+			0b10101100,
+			0b11100011,
+		}, 0, 0)
+
+		// Read sequentially and compare with random access
+		for i := range 16 {
+			bitAt, err := reader.ReadBitAt(i)
+			if err != nil {
+				t.Errorf("ReadBitAt(%d) returned error: %v", i, err)
+			}
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != bitAt {
+				t.Errorf("ReadBit() and ReadBitAt(%d) mismatch: %v vs %v", i, bit, bitAt)
+			}
+		}
+	})
+
+	t.Run("ReadBit_with_SetBits", func(t *testing.T) {
+		reader := NewBitReader([]uint8{0b11111111}, 0, 0)
+		reader.SetBits(5)
+
+		// Should only be able to read 5 bits
+		for i := range 5 {
+			bit, err := reader.ReadBit()
+			if err != nil {
+				t.Errorf("ReadBit() at pos %d returned error: %v", i, err)
+			}
+			if bit != true {
+				t.Errorf("ReadBit() at pos %d = %v; want true", i, bit)
+			}
+		}
+
+		// 6th bit should cause error
+		bit, err := reader.ReadBit()
+		if err != io.EOF {
+			t.Errorf("ReadBit() at pos 5 should return io.EOF after SetBits(5), got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBit() at pos 5 = %v; want false", bit)
 		}
 	})
 }

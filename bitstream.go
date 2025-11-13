@@ -1,6 +1,7 @@
 package bitstream
 
 import (
+	"io"
 	"sync"
 	"unsafe"
 )
@@ -16,6 +17,7 @@ type BitReader[T Unsigned] struct {
 	bits int // Total number of valid bits in the data
 	s    int // Number of valid bits per element (element size - left padding - right padding)
 	msb  T   // MSB mask for the valid bit range
+	pos  int // Current read position (cursor)
 }
 
 // NewBitReader creates a new BitReader for manipulating bits from integer slice data.
@@ -38,6 +40,7 @@ func NewBitReader[T Unsigned](data []T, leftPadd, rightPadd int) *BitReader[T] {
 		bits: len(data) * s,
 		s:    s,
 		msb:  T(1) << (size - leftPadd - 1),
+		pos:  0,
 	}
 }
 
@@ -104,6 +107,48 @@ func (r *BitReader[T]) Read64R(bits, n int) (b uint64) {
 // Bits returns the total number of valid bits in the BitReader.
 func (r *BitReader[T]) Bits() int {
 	return r.bits
+}
+
+// ReadBit reads one bit at the current position and advances the cursor.
+// Returns false and io.EOF if the position is beyond the valid bits.
+func (r *BitReader[T]) ReadBit() (bool, error) {
+	if r.pos >= r.bits {
+		return false, io.EOF
+	}
+	bit := r.readBitAt(r.pos)
+	r.pos++
+	return bit, nil
+}
+
+// ReadBitAt reads one bit at the specified position without moving the cursor.
+// Returns false and io.EOF if the position is beyond the valid bits.
+func (r *BitReader[T]) ReadBitAt(pos int) (bool, error) {
+	if pos >= r.bits {
+		return false, io.EOF
+	}
+	return r.readBitAt(pos), nil
+}
+
+// Pos returns the current read position (cursor).
+func (r *BitReader[T]) Pos() int {
+	return r.pos
+}
+
+// Seek sets the read position (cursor).
+// Allows seeking to any non-negative position, including beyond the valid bits.
+// Subsequent reads will return io.EOF if the position is at or beyond the valid bits.
+// Returns an error only for negative positions.
+func (r *BitReader[T]) Seek(pos int) error {
+	if pos < 0 {
+		return io.EOF
+	}
+	r.pos = pos
+	return nil
+}
+
+func (r *BitReader[T]) readBitAt(pos int) bool {
+	mask := r.msb >> (pos % r.s)
+	return r.data[pos/r.s]&mask != 0
 }
 
 func (r *BitReader[T]) right(bits, n int) (b uint64) {
