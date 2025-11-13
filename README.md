@@ -7,13 +7,14 @@ A Go library for efficient bit-level reading and writing operations on integer s
 - **BitReader**: Read bits from integer slices with configurable padding
   - Block-based reading (`Read8R`, `Read16R`, etc.)
   - Cursor-based reading (`ReadBit`, `ReadBitAt`, `Pos`, `Seek`)
+  - **Not thread-safe**: Use separate instances for concurrent access
 - **BitWriter**: Write bits to integer slices with automatic allocation
   - Block-based writing (`Write8`, `Write16`, etc.)
   - Cursor-based writing (`WriteBit`, `WriteBitAt`, `Pos`, `Seek`)
+  - **Thread-safe**: All operations protected by mutex
 - Generic support for `uint8`, `uint16`, `uint32`, `uint64`, and `uint`
-- Thread-safe `BitWriter` operations
 - Configurable left and right padding for each element
-- `io.EOF` error handling following Go standard library conventions
+- Error handling following Go standard library conventions (`io.EOF`, `ErrNegativePosition`)
 
 ## Installation
 

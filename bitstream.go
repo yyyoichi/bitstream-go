@@ -18,6 +18,10 @@ type Unsigned interface {
 
 // BitReader provides bit-level reading operations on integer slice data.
 // It treats the data as a continuous bit stream, allowing precise bit extraction.
+//
+// BitReader is not safe for concurrent use. If multiple goroutines access the same
+// BitReader, external synchronization is required. For concurrent reading scenarios,
+// create separate BitReader instances for each goroutine.
 type BitReader[T Unsigned] struct {
 	data []T // Source data to read bits from
 	bits int // Total number of valid bits in the data
@@ -192,7 +196,9 @@ func (r *BitReader[T]) right(bits, n int) (b uint64) {
 
 // BitWriter provides bit-level writing operations to integer slice data.
 // It treats the destination as a continuous bit stream, allowing precise bit insertion.
-// BitWriter is safe for concurrent use.
+//
+// BitWriter is safe for concurrent use. All methods are protected by an internal mutex,
+// allowing multiple goroutines to safely write to the same BitWriter instance.
 type BitWriter[T Unsigned] struct {
 	mu   *sync.Mutex
 	data []T // Destination data to write bits into
@@ -318,8 +324,10 @@ func (w *BitWriter[T]) AnyData() any {
 }
 
 // Bits returns the total number of valid bits in the BitWriter.
-func (r *BitWriter[T]) Bits() int {
-	return r.bits
+func (w *BitWriter[T]) Bits() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.bits
 }
 
 // WriteBit writes one bit at the current position and advances the cursor.
