@@ -109,6 +109,19 @@ func (r *BitReader[T]) Bits() int {
 	return r.bits
 }
 
+// Data returns the source data slice.
+// Use Bits() to get the total number of valid bits.
+func (r *BitReader[T]) Data() []T {
+	return r.data
+}
+
+// AnyData returns the source data as an any type.
+// This is useful when the exact type of the underlying data slice is not known at compile time.
+// Use Bits() to get the total number of valid bits.
+func (r *BitReader[T]) AnyData() any {
+	return r.data
+}
+
 // ReadBit reads one bit at the current position and advances the cursor.
 // Returns false and io.EOF if the position is beyond the valid bits.
 func (r *BitReader[T]) ReadBit() (bool, error) {
