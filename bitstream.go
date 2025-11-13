@@ -1,9 +1,15 @@
 package bitstream
 
 import (
+	"errors"
 	"io"
 	"sync"
 	"unsafe"
+)
+
+var (
+	// ErrNegativePosition is returned when a negative position is provided to Seek or WriteBitAt/ReadBitAt.
+	ErrNegativePosition = errors.New("bitstream: negative position")
 )
 
 type Unsigned interface {
@@ -135,7 +141,11 @@ func (r *BitReader[T]) ReadBit() (bool, error) {
 
 // ReadBitAt reads one bit at the specified position without moving the cursor.
 // Returns false and io.EOF if the position is beyond the valid bits.
+// Returns false and ErrNegativePosition for negative positions.
 func (r *BitReader[T]) ReadBitAt(pos int) (bool, error) {
+	if pos < 0 {
+		return false, ErrNegativePosition
+	}
 	if pos >= r.bits {
 		return false, io.EOF
 	}
@@ -150,10 +160,10 @@ func (r *BitReader[T]) Pos() int {
 // Seek sets the read position (cursor).
 // Allows seeking to any non-negative position, including beyond the valid bits.
 // Subsequent reads will return io.EOF if the position is at or beyond the valid bits.
-// Returns an error only for negative positions.
+// Returns ErrNegativePosition for negative positions.
 func (r *BitReader[T]) Seek(pos int) error {
 	if pos < 0 {
-		return io.EOF
+		return ErrNegativePosition
 	}
 	r.pos = pos
 	return nil
@@ -327,9 +337,10 @@ func (w *BitWriter[T]) WriteBit(bit bool) error {
 
 // WriteBitAt writes one bit at the specified position without moving the cursor.
 // Automatically extends the data slice if writing beyond current length.
+// Returns ErrNegativePosition for negative positions.
 func (w *BitWriter[T]) WriteBitAt(pos int, bit bool) error {
 	if pos < 0 {
-		return io.EOF
+		return ErrNegativePosition
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -349,10 +360,10 @@ func (w *BitWriter[T]) Pos() int {
 
 // Seek sets the write position (cursor).
 // Allows seeking to any non-negative position, including beyond current data.
-// Returns an error only for negative positions.
+// Returns ErrNegativePosition for negative positions.
 func (w *BitWriter[T]) Seek(pos int) error {
 	if pos < 0 {
-		return io.EOF
+		return ErrNegativePosition
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()

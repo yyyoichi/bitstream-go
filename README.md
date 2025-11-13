@@ -120,9 +120,9 @@ writer := bitstream.NewBitWriter[uint16](4, 0) // skip 4 top bits, 12 valid bits
 
 **Cursor-based reading:**
 - `ReadBit() (bool, error)` - Read one bit at cursor and advance (returns `io.EOF` if out of bounds)
-- `ReadBitAt(pos int) (bool, error)` - Read one bit at position without moving cursor (returns `io.EOF` if out of bounds)
+- `ReadBitAt(pos int) (bool, error)` - Read one bit at position without moving cursor (returns `io.EOF` if out of bounds, `ErrNegativePosition` for negative positions)
 - `Pos() int` - Get current cursor position
-- `Seek(pos int) error` - Set cursor position (returns error only for negative positions)
+- `Seek(pos int) error` - Set cursor position (returns `ErrNegativePosition` for negative positions)
 
 **Other:**
 - `Bits() int` - Get total number of valid bits
@@ -144,9 +144,9 @@ writer := bitstream.NewBitWriter[uint16](4, 0) // skip 4 top bits, 12 valid bits
 
 **Cursor-based writing:**
 - `WriteBit(bit bool) error` - Write one bit at cursor and advance (auto-extends data slice)
-- `WriteBitAt(pos int, bit bool) error` - Write one bit at position without moving cursor (supports overwriting, returns error for negative positions)
+- `WriteBitAt(pos int, bit bool) error` - Write one bit at position without moving cursor (supports overwriting, returns `ErrNegativePosition` for negative positions)
 - `Pos() int` - Get current cursor position (thread-safe)
-- `Seek(pos int) error` - Set cursor position (returns error only for negative positions)
+- `Seek(pos int) error` - Set cursor position (returns `ErrNegativePosition` for negative positions)
 
 **Other:**
 - `Data() []T` - Get accumulated data slice

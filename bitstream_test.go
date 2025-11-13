@@ -267,6 +267,15 @@ func TestBitReader(t *testing.T) {
 		if bit != false {
 			t.Errorf("ReadBitAt(100) = %v; want false", bit)
 		}
+
+		// Test negative position
+		bit, err = reader.ReadBitAt(-1)
+		if err != ErrNegativePosition {
+			t.Errorf("ReadBitAt(-1) should return ErrNegativePosition, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(-1) = %v; want false", bit)
+		}
 	})
 
 	t.Run("ReadBitAt_withPadding", func(t *testing.T) {
@@ -317,6 +326,15 @@ func TestBitReader(t *testing.T) {
 		}
 		if bit != false {
 			t.Errorf("ReadBitAt(12) = %v; want false", bit)
+		}
+
+		// Test negative position
+		bit, err = reader.ReadBitAt(-1)
+		if err != ErrNegativePosition {
+			t.Errorf("ReadBitAt(-1) should return ErrNegativePosition, got %v", err)
+		}
+		if bit != false {
+			t.Errorf("ReadBitAt(-1) = %v; want false", bit)
 		}
 	})
 
@@ -379,8 +397,8 @@ func TestBitReader(t *testing.T) {
 
 		// Seek to negative position should return error
 		err = reader.Seek(-1)
-		if err == nil {
-			t.Error("Seek(-1) should return error")
+		if err != ErrNegativePosition {
+			t.Errorf("Seek(-1) should return ErrNegativePosition, got %v", err)
 		}
 		// Position should not change when Seek fails
 		if reader.Pos() != 100 {
@@ -901,8 +919,8 @@ func TestBitWriter(t *testing.T) {
 
 		// Seek to negative position should return error
 		err = writer.Seek(-1)
-		if err == nil {
-			t.Error("Seek(-1) should return error")
+		if err != ErrNegativePosition {
+			t.Errorf("Seek(-1) should return ErrNegativePosition, got %v", err)
 		}
 	})
 
