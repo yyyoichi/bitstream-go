@@ -128,7 +128,7 @@ func TestBitReader(t *testing.T) {
 			}
 		}
 	})
-	t.Run("U16R_panic", func(t *testing.T) {
+	t.Run("Read16R_panic", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("expected panic when bits > 16")
@@ -150,7 +150,7 @@ func TestBitReader(t *testing.T) {
 }
 
 func TestBitWriter(t *testing.T) {
-	t.Run("writeU8", func(t *testing.T) {
+	t.Run("Write8", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
 		writer.Write8(0, 8, 255)
 		if writer.Bits() != 8 {
@@ -178,7 +178,7 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 1 element in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("write16", func(t *testing.T) {
+	t.Run("Write16", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
 		writer.Write16(0, 16, 65535)
 		if writer.Bits() != 16 {
@@ -206,7 +206,7 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 1 element in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("write32", func(t *testing.T) {
+	t.Run("Write32", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
 		writer.Write32(0, 32, 0xFFFFFFFF)
 		if writer.Bits() != 32 {
@@ -237,7 +237,7 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 2 elements in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("write64", func(t *testing.T) {
+	t.Run("Write64", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
 		writer.Write64(0, 64, 0xFFFFFFFFFFFFFFFF)
 		if writer.Bits() != 64 {
@@ -271,7 +271,7 @@ func TestBitWriter(t *testing.T) {
 			t.Errorf("expected 3 elements in data, got %d", len(writer.data))
 		}
 	})
-	t.Run("writeBool", func(t *testing.T) {
+	t.Run("WriteBool", func(t *testing.T) {
 		writer := NewBitWriter[uint64](0, 0)
 		writer.WriteBool(true)
 		if writer.Bits() != 1 {
