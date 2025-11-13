@@ -232,19 +232,24 @@ func (w *BitWriter[T]) WriteBool(data bool) {
 
 // Data returns the accumulated data and the total number of bits written.
 // The returned slice and bit count reflect all bits written so far.
-func (w *BitWriter[T]) Data() ([]T, int) {
+func (w *BitWriter[T]) Data() []T {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.data, w.totalBits()
+	return w.data
 }
 
 // AnyData returns the accumulated data as an any type and the total number of bits written.
 // The returned slice and bit count reflect all bits written so far.
 // This is useful when the exact type of the underlying data slice is not known at compile time.
-func (w *BitWriter[T]) AnyData() (any, int) {
+func (w *BitWriter[T]) AnyData() any {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.data, w.totalBits()
+	return w.data
+}
+
+// Bits returns the total number of valid bits in the BitWriter.
+func (r *BitWriter[T]) Bits() int {
+	return r.bits
 }
 
 func (w *BitWriter[T]) write(b bool) {
@@ -256,13 +261,4 @@ func (w *BitWriter[T]) write(b bool) {
 		w.data[idx] |= w.msb >> (w.bits % w.s)
 	}
 	w.bits += 1
-}
-
-func (w *BitWriter[T]) totalBits() int {
-	bits := w.bits
-	// add left padding bits for each element
-	bits += len(w.data) * w.lp
-	// add right padding bits for each element
-	bits += (len(w.data) - 1) * w.rp
-	return bits
 }
