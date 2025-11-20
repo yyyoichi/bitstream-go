@@ -55,10 +55,16 @@ func NewBitReader[T Unsigned](data []T, leftPadd, rightPadd int) *BitReader[T] {
 }
 
 // SetBits sets the total number of valid bits in the BitReader.
+// if bits exceeds the maximum possible bits based on the data length and padding,
+// it will be capped to that maximum.
 // Data beyond the specified bits position will be treated as zero,
 // regardless of the actual padding configuration.
 // This is useful for limiting the readable range within the data.
 func (r *BitReader[T]) SetBits(bits int) {
+	if max := len(r.data) * r.s; bits > max {
+		bits = max
+		return
+	}
 	r.bits = bits
 }
 

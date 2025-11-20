@@ -60,6 +60,20 @@ func TestBitReader(t *testing.T) {
 			})
 		}
 	})
+	t.Run("rightWithExeededBits", func(t *testing.T) {
+		reader := NewBitReader([]uint8{255}, 0, 0)
+		reader.SetBits(8 + 1)
+		got := reader.Read8R(8, 1)
+		if got != 0 {
+			t.Errorf("expected 0 when reading beyond set bits, got %08b", got)
+		}
+		reader = NewBitReader([]uint8{255}, 2, 2)
+		reader.SetBits(4 + 1)
+		got = reader.Read8R(4, 1)
+		if got != 0 {
+			t.Errorf("expected 0 when reading beyond set bits with left padding, got %08b", got)
+		}
+	})
 	t.Run("right_BoundaryValue", func(t *testing.T) {
 		reader := NewBitReader([]uint8{0b11111111}, 0, 0)
 		test := []struct {
